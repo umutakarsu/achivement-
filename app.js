@@ -93,6 +93,8 @@ let selectedId = nodes[0]?.id || null;
 const setupPanel = document.querySelector("#setupPanel");
 const setupGoalInput = document.querySelector("#setupGoalInput");
 const setupPrereqInput = document.querySelector("#setupPrereqInput");
+const graphShell = document.querySelector(".graph-shell");
+const graphCanvas = document.querySelector(".achievement-map");
 const mapEl = document.querySelector("#achievementMap");
 const linkLayer = document.querySelector("#linkLayer");
 const template = document.querySelector("#nodeTemplate");
@@ -113,6 +115,22 @@ const inputs = {
   confidence: document.querySelector("#confidenceInput"),
   friction: document.querySelector("#frictionInput"),
 };
+
+const view = {
+  scale: 1,
+  x: 0,
+  y: 0,
+  focusMode: false,
+  isPanning: false,
+  panStartX: 0,
+  panStartY: 0,
+  startX: 0,
+  startY: 0,
+  pinchStartDistance: 0,
+  pinchStartScale: 1,
+};
+
+const activePointers = new Map();
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -177,6 +195,11 @@ function getRelatedIds() {
 
   childrenOf(selected.id).forEach((child) => related.add(child.id));
   return related;
+}
+
+function getVisibleIds() {
+  if (!view.focusMode) return new Set(nodes.map((node) => node.id));
+  return getRelatedIds();
 }
 
 function getReadinessChecks(node) {
@@ -259,6 +282,7 @@ function renderGraph() {
 
   const positions = getGraphLayout();
   const relatedIds = getRelatedIds();
+  const visibleIds = getVisibleIds();
   const hasSelection = Boolean(selectedId);
 
   nodes.forEach((node) => {
@@ -273,6 +297,7 @@ function renderGraph() {
     line.setAttribute("x2", end.x);
     line.setAttribute("y2", end.y);
     line.classList.add("graph-link");
+    line.style.display = visibleIds.has(node.id) && visibleIds.has(node.parentId) ? "" : "none";
     line.classList.toggle("is-related", relatedIds.has(node.id) && relatedIds.has(node.parentId));
     linkLayer.append(line);
   });
@@ -289,12 +314,14 @@ function renderGraph() {
     button.classList.toggle("is-ready", isReady(node));
     button.classList.toggle("is-low-confidence", Number(node.confidence) < 65);
     button.classList.toggle("is-dimmed", hasSelection && !relatedIds.has(node.id));
+    button.hidden = !visibleIds.has(node.id);
     button.querySelector(".node-label").textContent = node.title || "Untitled achievement";
     button.addEventListener("click", () => selectNode(node.id));
     mapEl.append(button);
   });
 
   renderHint();
+  applyViewTransform();
 }
 
 function renderHint() {
@@ -309,7 +336,8 @@ function renderHint() {
   const avgConfidence = Math.round(
     nodes.reduce((total, node) => total + Number(node.confidence || 0), 0) / nodes.length,
   );
-  graphHint.textContent = `${done}/${nodes.length} complete. ${ready}/${nodes.length} clear enough to act on. Average confidence ${avgConfidence}%. Next review: ${next?.title || "none"}.`;
+  const mode = view.focusMode ? "Local focus" : "Global graph";
+  graphHint.textContent = `${mode}. ${done}/${nodes.length} complete. ${ready}/${nodes.length} clear enough to act on. Average confidence ${avgConfidence}%. Next review: ${next?.title || "none"}. Scroll to zoom, drag empty space to pan.`;
 }
 
 function renderSetup() {
@@ -369,6 +397,60 @@ function selectNode(id) {
   selectedId = id;
   inspector.classList.add("is-open");
   render();
+}
+
+function clampScale(scale) {
+  return Math.max(0.45, Math.min(2.8, scale));
+}
+
+function applyViewTransform() {
+  const transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+  mapEl.style.transform = transform;
+  linkLayer.style.transform = transform;
+  graphShell.classList.toggle("is-zoomed-out", view.scale < 0.72);
+  graphShell.classList.toggle("is-focus-mode", view.focusMode);
+}
+
+function zoomAt(clientX, clientY, nextScale) {
+  const rect = graphCanvas.getBoundingClientRect();
+  const pointX = clientX - rect.left;
+  const pointY = clientY - rect.top;
+  const scale = clampScale(nextScale);
+  const ratio = scale / view.scale;
+
+  view.x = pointX - (pointX - view.x) * ratio;
+  view.y = pointY - (pointY - view.y) * ratio;
+  view.scale = scale;
+  applyViewTransform();
+}
+
+function zoomBy(multiplier) {
+  const rect = graphCanvas.getBoundingClientRect();
+  zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, view.scale * multiplier);
+}
+
+function resetView() {
+  view.scale = 1;
+  view.x = 0;
+  view.y = 0;
+  applyViewTransform();
+}
+
+function toggleFocusMode() {
+  view.focusMode = !view.focusMode;
+  renderGraph();
+}
+
+function getPointerMetrics() {
+  const points = [...activePointers.values()];
+  if (points.length < 2) return null;
+
+  const [a, b] = points;
+  return {
+    distance: Math.hypot(a.x - b.x, a.y - b.y),
+    centerX: (a.x + b.x) / 2,
+    centerY: (a.y + b.y) / 2,
+  };
 }
 
 function selectNextUnclearNode() {
@@ -547,6 +629,10 @@ document.querySelector("#closeInspectorButton").addEventListener("click", () => 
 });
 document.querySelector("#addChildButton").addEventListener("click", addSupportingAchievement);
 document.querySelector("#nextNodeButton").addEventListener("click", selectNextUnclearNode);
+document.querySelector("#zoomInButton").addEventListener("click", () => zoomBy(1.18));
+document.querySelector("#zoomOutButton").addEventListener("click", () => zoomBy(0.85));
+document.querySelector("#fitButton").addEventListener("click", resetView);
+document.querySelector("#focusButton").addEventListener("click", toggleFocusMode);
 document.querySelector("#completeButton").addEventListener("click", () => {
   const node = getSelected();
   if (!node) return;
@@ -556,6 +642,79 @@ document.querySelector("#completeButton").addEventListener("click", () => {
 });
 document.querySelector("#shrinkButton").addEventListener("click", makeSelectedSmaller);
 document.querySelector("#deleteButton").addEventListener("click", deleteSelected);
+
+graphCanvas.addEventListener(
+  "wheel",
+  (event) => {
+    if (!nodes.length || !setupPanel.classList.contains("is-hidden")) return;
+    event.preventDefault();
+    const multiplier = event.deltaY > 0 ? 0.9 : 1.1;
+    zoomAt(event.clientX, event.clientY, view.scale * multiplier);
+  },
+  { passive: false },
+);
+
+graphCanvas.addEventListener("pointerdown", (event) => {
+  if (event.target.closest(".graph-node") || event.target.closest(".right-rail")) return;
+  if (event.button !== 0 && event.button !== 1) return;
+
+  activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  graphCanvas.classList.add("is-panning");
+  graphCanvas.setPointerCapture(event.pointerId);
+
+  if (activePointers.size >= 2) {
+    const metrics = getPointerMetrics();
+    view.isPanning = false;
+    view.pinchStartDistance = metrics.distance;
+    view.pinchStartScale = view.scale;
+    return;
+  }
+
+  view.isPanning = true;
+  view.panStartX = event.clientX;
+  view.panStartY = event.clientY;
+  view.startX = view.x;
+  view.startY = view.y;
+});
+
+graphCanvas.addEventListener("pointermove", (event) => {
+  if (activePointers.has(event.pointerId)) {
+    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  }
+
+  if (activePointers.size >= 2) {
+    const metrics = getPointerMetrics();
+    if (!metrics || !view.pinchStartDistance) return;
+    zoomAt(metrics.centerX, metrics.centerY, view.pinchStartScale * (metrics.distance / view.pinchStartDistance));
+    return;
+  }
+
+  if (!view.isPanning) return;
+  view.x = view.startX + event.clientX - view.panStartX;
+  view.y = view.startY + event.clientY - view.panStartY;
+  applyViewTransform();
+});
+
+graphCanvas.addEventListener("pointerup", (event) => {
+  activePointers.delete(event.pointerId);
+  view.isPanning = false;
+  graphCanvas.classList.remove("is-panning");
+  graphCanvas.releasePointerCapture(event.pointerId);
+});
+
+graphCanvas.addEventListener("pointercancel", () => {
+  activePointers.clear();
+  view.isPanning = false;
+  graphCanvas.classList.remove("is-panning");
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.target.matches("input, textarea, select")) return;
+  if (event.key === "+" || event.key === "=") zoomBy(1.18);
+  if (event.key === "-") zoomBy(0.85);
+  if (event.key === "0") resetView();
+  if (event.key.toLowerCase() === "f") toggleFocusMode();
+});
 
 function render() {
   renderSetup();
