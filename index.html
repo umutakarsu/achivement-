@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Achievement Graph</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="graph-shell">
+      <header class="top-chrome" aria-label="Graph toolbar">
+        <div class="history-controls" aria-hidden="true">
+          <span>&lt;</span>
+          <span>&gt;</span>
+        </div>
+        <h1>Achievement Graph</h1>
+        <div class="toolbar-actions">
+          <button id="newMapButton" type="button">New</button>
+          <button id="resetButton" type="button">Example</button>
+        </div>
+      </header>
+
+      <section class="achievement-map" aria-label="Achievement graph">
+        <svg id="linkLayer" class="link-layer" viewBox="0 0 100 100" aria-hidden="true"></svg>
+        <div id="achievementMap" class="graph-nodes" aria-label="Achievement nodes"></div>
+      </section>
+
+      <aside class="graph-hint" id="graphHint" aria-live="polite"></aside>
+
+      <nav class="right-rail" aria-label="Graph controls">
+        <button id="inspectorToggle" type="button" aria-label="Toggle selected achievement editor">o</button>
+        <button id="addChildButton" type="button" aria-label="Add supporting achievement">+</button>
+      </nav>
+
+      <section class="setup-panel" id="setupPanel" aria-label="Create achievement map">
+        <div class="setup-card">
+          <p class="eyebrow">Start with the peak</p>
+          <h2>What is the achievement you want at the top?</h2>
+          <label>
+            Top achievement
+            <input
+              id="setupGoalInput"
+              type="text"
+              placeholder="Example: launch my first paid product"
+              autocomplete="off"
+            />
+          </label>
+          <label>
+            Supporting achievements
+            <textarea
+              id="setupPrereqInput"
+              rows="5"
+              placeholder="One per line, like: validate the idea&#10;build the first version&#10;get 10 users"
+            ></textarea>
+          </label>
+          <div class="setup-actions">
+            <button id="createMapButton" type="button">Create graph</button>
+            <button id="useExampleButton" class="quiet-button" type="button">Use example</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="inspector" id="inspector" aria-label="Selected achievement editor">
+        <header class="inspector-header">
+          <div>
+            <span class="eyebrow">Selected node</span>
+            <strong id="inspectorPath">Top achievement</strong>
+          </div>
+          <button id="closeInspectorButton" class="quiet-button" type="button">Close</button>
+        </header>
+
+        <label>
+          Achievement
+          <input id="titleInput" type="text" />
+        </label>
+
+        <label>
+          Why this matters
+          <textarea id="whyInput" rows="3"></textarea>
+        </label>
+
+        <label>
+          Proof it is achieved
+          <textarea id="evidenceInput" rows="2"></textarea>
+        </label>
+
+        <label>
+          Likely blocker
+          <textarea id="blockerInput" rows="2"></textarea>
+        </label>
+
+        <label>
+          Smallest next action
+          <textarea id="actionInput" rows="2"></textarea>
+        </label>
+
+        <div class="if-then-box">
+          <span class="eyebrow">If-then plan</span>
+          <p id="ifThenPreview"></p>
+        </div>
+
+        <div class="field-grid">
+          <label>
+            Confidence
+            <input id="confidenceInput" type="range" min="0" max="100" step="5" />
+            <span id="confidenceValue"></span>
+          </label>
+          <label>
+            Friction
+            <select id="frictionInput">
+              <option>Low</option>
+              <option>Medium</option>
+              <option>High</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="suggestion" id="suggestionBox"></div>
+
+        <div class="inspector-actions">
+          <button id="completeButton" type="button">Toggle done</button>
+          <button id="deleteButton" class="quiet-button danger-button" type="button">Delete</button>
+        </div>
+      </aside>
+    </main>
+
+    <template id="nodeTemplate">
+      <button class="graph-node" type="button">
+        <span class="node-dot"></span>
+        <span class="node-label"></span>
+      </button>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
