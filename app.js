@@ -104,9 +104,15 @@ const zoomLabel = document.querySelector("#zoomLabel");
 const readinessSummary = document.querySelector("#readinessSummary");
 const inspector = document.querySelector("#inspector");
 const inspectorPath = document.querySelector("#inspectorPath");
+const previewTitle = document.querySelector("#previewTitle");
+const previewMeta = document.querySelector("#previewMeta");
+const previewWhy = document.querySelector("#previewWhy");
+const previewAction = document.querySelector("#previewAction");
+const relationChips = document.querySelector("#relationChips");
 const ifThenPreview = document.querySelector("#ifThenPreview");
 const suggestionBox = document.querySelector("#suggestionBox");
 const readinessList = document.querySelector("#readinessList");
+const readinessCount = document.querySelector("#readinessCount");
 const confidenceValue = document.querySelector("#confidenceValue");
 
 const inputs = {
@@ -355,9 +361,11 @@ function renderInspector() {
   const node = getSelected();
   if (!node) {
     inspector.classList.remove("is-open");
+    inspector.classList.remove("is-editing");
     return;
   }
 
+  renderPreview(node);
   inputs.title.value = node.title;
   inputs.why.value = node.why;
   inputs.evidence.value = node.evidence;
@@ -370,6 +378,48 @@ function renderInspector() {
   ifThenPreview.textContent = buildIfThen(node);
   renderReadiness(node);
   renderSuggestion(node);
+}
+
+function renderPreview(node) {
+  const checks = getReadinessChecks(node);
+  const met = checks.filter((check) => check.met).length;
+  const children = childrenOf(node.id);
+  const parent = getParent(node);
+
+  previewTitle.textContent = node.title || "Untitled achievement";
+  previewMeta.textContent = `${node.done ? "Done" : "Open"} - ${node.confidence}% belief - ${met}/${checks.length} ready`;
+  previewWhy.textContent = node.why.trim() || "Add why this achievement matters so the node has emotional pull.";
+  previewAction.textContent = node.action.trim() || "Define the smallest visible action.";
+
+  relationChips.innerHTML = "";
+  if (parent) {
+    relationChips.append(createRelationChip(`Parent: ${parent.title}`, parent.id));
+  } else {
+    const chip = document.createElement("span");
+    chip.className = "relation-chip is-static";
+    chip.textContent = "Top achievement";
+    relationChips.append(chip);
+  }
+
+  children.slice(0, 4).forEach((child) => {
+    relationChips.append(createRelationChip(`Child: ${child.title}`, child.id));
+  });
+
+  if (!children.length) {
+    const chip = document.createElement("span");
+    chip.className = "relation-chip is-static";
+    chip.textContent = "No supporting nodes yet";
+    relationChips.append(chip);
+  }
+}
+
+function createRelationChip(label, id) {
+  const chip = document.createElement("button");
+  chip.className = "relation-chip";
+  chip.type = "button";
+  chip.textContent = label;
+  chip.addEventListener("click", () => selectNode(id));
+  return chip;
 }
 
 function buildIfThen(node) {
@@ -392,7 +442,10 @@ function renderSuggestion(node) {
 
 function renderReadiness(node) {
   readinessList.innerHTML = "";
-  getReadinessChecks(node).forEach((check) => {
+  const checks = getReadinessChecks(node);
+  const met = checks.filter((check) => check.met).length;
+  readinessCount.textContent = `${met}/${checks.length}`;
+  checks.forEach((check) => {
     const item = document.createElement("div");
     item.className = `readiness-item ${check.met ? "is-met" : ""}`;
     item.innerHTML = `<span>${check.label}</span><span class="readiness-mark">${check.met ? "OK" : "..."}</span>`;
@@ -402,7 +455,9 @@ function renderReadiness(node) {
 
 function selectNode(id) {
   selectedId = id;
+  view.focusMode = true;
   inspector.classList.add("is-open");
+  inspector.classList.remove("is-editing");
   render();
 }
 
@@ -520,6 +575,8 @@ function createInitialMap() {
 
   selectedId = topId;
   inspector.classList.add("is-open");
+  inspector.classList.remove("is-editing");
+  view.focusMode = true;
   save();
   render();
 }
@@ -528,6 +585,8 @@ function useExample() {
   nodes = clone(exampleNodes);
   selectedId = nodes[0].id;
   inspector.classList.remove("is-open");
+  inspector.classList.remove("is-editing");
+  view.focusMode = false;
   save();
   render();
 }
@@ -537,6 +596,8 @@ function createNewMap() {
   selectedId = null;
   localStorage.removeItem(STORAGE_KEY);
   inspector.classList.remove("is-open");
+  inspector.classList.remove("is-editing");
+  view.focusMode = false;
   setupGoalInput.value = "";
   setupPrereqInput.value = "";
   render();
@@ -565,6 +626,8 @@ function addSupportingAchievement() {
   });
   selectedId = id;
   inspector.classList.add("is-open");
+  inspector.classList.add("is-editing");
+  view.focusMode = true;
   save();
   render();
 }
@@ -591,6 +654,8 @@ function makeSelectedSmaller() {
   node.confidence = Math.max(Number(node.confidence), 65);
   selectedId = id;
   inspector.classList.add("is-open");
+  inspector.classList.remove("is-editing");
+  view.focusMode = true;
   save();
   render();
 }
@@ -631,10 +696,14 @@ document.querySelector("#newMapButton").addEventListener("click", createNewMap);
 document.querySelector("#resetButton").addEventListener("click", useExample);
 document.querySelector("#inspectorToggle").addEventListener("click", () => {
   if (!nodes.length) return;
-  inspector.classList.toggle("is-open");
+  inspector.classList.add("is-open");
+  inspector.classList.toggle("is-editing");
 });
 document.querySelector("#closeInspectorButton").addEventListener("click", () => {
   inspector.classList.remove("is-open");
+  inspector.classList.remove("is-editing");
+  view.focusMode = false;
+  renderGraph();
 });
 document.querySelector("#addChildButton").addEventListener("click", addSupportingAchievement);
 document.querySelector("#nextNodeButton").addEventListener("click", selectNextUnclearNode);
@@ -642,7 +711,12 @@ document.querySelector("#zoomInButton").addEventListener("click", () => zoomBy(1
 document.querySelector("#zoomOutButton").addEventListener("click", () => zoomBy(0.85));
 document.querySelector("#fitButton").addEventListener("click", resetView);
 document.querySelector("#focusButton").addEventListener("click", toggleFocusMode);
-document.querySelector("#completeButton").addEventListener("click", () => {
+document.querySelector("#editDetailsButton").addEventListener("click", () => {
+  inspector.classList.add("is-editing");
+  inputs.title.focus();
+});
+document.querySelector("#previewAddButton").addEventListener("click", addSupportingAchievement);
+document.querySelector("#previewDoneButton").addEventListener("click", () => {
   const node = getSelected();
   if (!node) return;
   node.done = !node.done;

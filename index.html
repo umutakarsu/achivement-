@@ -103,61 +103,89 @@
           <button id="closeInspectorButton" class="quiet-button" type="button">Close</button>
         </header>
 
-        <label>
-          Achievement
-          <input id="titleInput" type="text" placeholder="Specific achievement, not a vague theme" />
-        </label>
+        <section class="node-preview" aria-label="Selected achievement preview">
+          <div class="preview-title-row">
+            <h2 id="previewTitle"></h2>
+            <span id="previewMeta"></span>
+          </div>
+          <p id="previewWhy" class="preview-why"></p>
 
-        <label>
-          Why this matters
-          <textarea id="whyInput" rows="3" placeholder="I want this because..."></textarea>
-        </label>
+          <div class="next-action-card">
+            <span class="eyebrow">Next action</span>
+            <strong id="previewAction"></strong>
+          </div>
 
-        <label>
-          Proof it is achieved
-          <textarea id="evidenceInput" rows="2" placeholder="I will know this is done when..."></textarea>
-        </label>
+          <div class="relation-block">
+            <span class="eyebrow">Path and links</span>
+            <div class="relation-chips" id="relationChips"></div>
+          </div>
 
-        <label>
-          Likely blocker
-          <textarea id="blockerInput" rows="2" placeholder="The thing most likely to stop me is..."></textarea>
-        </label>
+          <div class="preview-actions">
+            <button id="editDetailsButton" type="button">Edit details</button>
+            <button id="previewDoneButton" type="button">Toggle done</button>
+            <button id="previewAddButton" type="button">Add child</button>
+          </div>
+        </section>
 
-        <label>
-          Smallest next action
-          <textarea id="actionInput" rows="2" placeholder="The next action I can take is..."></textarea>
-        </label>
-
-        <div class="if-then-box">
-          <span class="eyebrow">If-then plan</span>
-          <p id="ifThenPreview"></p>
-        </div>
-
-        <div class="readiness-box">
-          <span class="eyebrow">Readiness</span>
-          <div class="readiness-list" id="readinessList"></div>
-        </div>
-
-        <div class="field-grid">
+        <section class="details-form" id="detailsForm" aria-label="Achievement details">
           <label>
-            Confidence
-            <input id="confidenceInput" type="range" min="0" max="100" step="5" />
-            <span id="confidenceValue"></span>
+            Achievement
+            <input id="titleInput" type="text" placeholder="Specific achievement, not a vague theme" />
           </label>
-          <label>
-            Friction
-            <select id="frictionInput">
-              <option>Low</option>
-              <option>Medium</option>
-              <option>High</option>
-            </select>
-          </label>
-        </div>
 
-        <div class="suggestion" id="suggestionBox"></div>
+          <label>
+            Why this matters
+            <textarea id="whyInput" rows="3" placeholder="I want this because..."></textarea>
+          </label>
+
+          <label>
+            Proof it is achieved
+            <textarea id="evidenceInput" rows="2" placeholder="I will know this is done when..."></textarea>
+          </label>
+
+          <label>
+            Likely blocker
+            <textarea id="blockerInput" rows="2" placeholder="The thing most likely to stop me is..."></textarea>
+          </label>
+
+          <label>
+            Smallest next action
+            <textarea id="actionInput" rows="2" placeholder="The next action I can take is..."></textarea>
+          </label>
+
+          <div class="if-then-box">
+            <span class="eyebrow">If-then plan</span>
+            <p id="ifThenPreview"></p>
+          </div>
+
+          <details class="readiness-box" id="readinessDetails">
+            <summary>
+              <span class="eyebrow">Readiness</span>
+              <span id="readinessCount"></span>
+            </summary>
+            <div class="readiness-list" id="readinessList"></div>
+          </details>
+
+          <div class="field-grid">
+            <label>
+              Confidence
+              <input id="confidenceInput" type="range" min="0" max="100" step="5" />
+              <span id="confidenceValue"></span>
+            </label>
+            <label>
+              Friction
+              <select id="frictionInput">
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="suggestion" id="suggestionBox"></div>
+        </section>
 
         <div class="inspector-actions">
-          <button id="completeButton" type="button">Toggle done</button>
           <button id="shrinkButton" type="button">Make smaller</button>
           <button id="deleteButton" class="quiet-button danger-button" type="button">Delete</button>
         </div>
