@@ -101,6 +101,7 @@ const inspector = document.querySelector("#inspector");
 const inspectorPath = document.querySelector("#inspectorPath");
 const ifThenPreview = document.querySelector("#ifThenPreview");
 const suggestionBox = document.querySelector("#suggestionBox");
+const readinessList = document.querySelector("#readinessList");
 const confidenceValue = document.querySelector("#confidenceValue");
 
 const inputs = {
@@ -178,6 +179,43 @@ function getRelatedIds() {
   return related;
 }
 
+function getReadinessChecks(node) {
+  return [
+    {
+      label: "Specific achievement",
+      met: node.title.trim().split(/\s+/).length >= 3,
+    },
+    {
+      label: "Self-endorsed why",
+      met: node.why.trim().length >= 24,
+    },
+    {
+      label: "Proof of completion",
+      met: node.evidence.trim().length >= 8,
+    },
+    {
+      label: "Named blocker",
+      met: node.blocker.trim().length >= 5,
+    },
+    {
+      label: "Small next action",
+      met: node.action.trim().split(/\s+/).length >= 4,
+    },
+    {
+      label: "Believable enough",
+      met: Number(node.confidence) >= 65,
+    },
+  ];
+}
+
+function isReady(node) {
+  return getReadinessChecks(node).every((check) => check.met);
+}
+
+function getNextUnclearNode() {
+  return nodes.find((node) => !node.done && !isReady(node)) || nodes.find((node) => !node.done) || nodes[0] || null;
+}
+
 function getGraphLayout() {
   const groups = new Map();
   nodes.forEach((node) => {
@@ -248,6 +286,8 @@ function renderGraph() {
     button.style.top = `${position.y}%`;
     button.classList.toggle("is-selected", node.id === selectedId);
     button.classList.toggle("is-done", node.done);
+    button.classList.toggle("is-ready", isReady(node));
+    button.classList.toggle("is-low-confidence", Number(node.confidence) < 65);
     button.classList.toggle("is-dimmed", hasSelection && !relatedIds.has(node.id));
     button.querySelector(".node-label").textContent = node.title || "Untitled achievement";
     button.addEventListener("click", () => selectNode(node.id));
@@ -264,10 +304,12 @@ function renderHint() {
   }
 
   const done = nodes.filter((node) => node.done).length;
+  const ready = nodes.filter(isReady).length;
+  const next = getNextUnclearNode();
   const avgConfidence = Math.round(
     nodes.reduce((total, node) => total + Number(node.confidence || 0), 0) / nodes.length,
   );
-  graphHint.textContent = `${done}/${nodes.length} complete. Average confidence ${avgConfidence}%. Click a node to edit its motivation, proof, blocker, and next action.`;
+  graphHint.textContent = `${done}/${nodes.length} complete. ${ready}/${nodes.length} clear enough to act on. Average confidence ${avgConfidence}%. Next review: ${next?.title || "none"}.`;
 }
 
 function renderSetup() {
@@ -291,6 +333,7 @@ function renderInspector() {
   confidenceValue.textContent = `${node.confidence}%`;
   inspectorPath.textContent = getDepth(node) === 0 ? "Top achievement" : "Supporting achievement";
   ifThenPreview.textContent = buildIfThen(node);
+  renderReadiness(node);
   renderSuggestion(node);
 }
 
@@ -312,10 +355,26 @@ function renderSuggestion(node) {
     "Confidence is low. Make this smaller: reduce the node until it feels at least 65% believable, or add a supporting achievement that removes the blocker.";
 }
 
+function renderReadiness(node) {
+  readinessList.innerHTML = "";
+  getReadinessChecks(node).forEach((check) => {
+    const item = document.createElement("div");
+    item.className = `readiness-item ${check.met ? "is-met" : ""}`;
+    item.innerHTML = `<span>${check.label}</span><span class="readiness-mark">${check.met ? "OK" : "..."}</span>`;
+    readinessList.append(item);
+  });
+}
+
 function selectNode(id) {
   selectedId = id;
   inspector.classList.add("is-open");
   render();
+}
+
+function selectNextUnclearNode() {
+  const next = getNextUnclearNode();
+  if (!next) return;
+  selectNode(next.id);
 }
 
 function updateSelected(key, value) {
@@ -419,6 +478,32 @@ function addSupportingAchievement() {
   render();
 }
 
+function makeSelectedSmaller() {
+  const node = getSelected();
+  if (!node) return;
+
+  const blocker = node.blocker.trim();
+  const title = blocker ? `Remove blocker: ${blocker}` : `Make "${node.title}" easier`;
+  const id = makeId("support");
+  nodes.push({
+    id,
+    parentId: node.id,
+    title,
+    why: `This makes "${node.title}" more believable.`,
+    blocker: "",
+    confidence: 70,
+    friction: "Low",
+    evidence: "",
+    action: "Define the smallest version I can do next.",
+    done: false,
+  });
+  node.confidence = Math.max(Number(node.confidence), 65);
+  selectedId = id;
+  inspector.classList.add("is-open");
+  save();
+  render();
+}
+
 function deleteSelected() {
   const node = getSelected();
   if (!node || !node.parentId) return;
@@ -461,6 +546,7 @@ document.querySelector("#closeInspectorButton").addEventListener("click", () => 
   inspector.classList.remove("is-open");
 });
 document.querySelector("#addChildButton").addEventListener("click", addSupportingAchievement);
+document.querySelector("#nextNodeButton").addEventListener("click", selectNextUnclearNode);
 document.querySelector("#completeButton").addEventListener("click", () => {
   const node = getSelected();
   if (!node) return;
@@ -468,6 +554,7 @@ document.querySelector("#completeButton").addEventListener("click", () => {
   save();
   render();
 });
+document.querySelector("#shrinkButton").addEventListener("click", makeSelectedSmaller);
 document.querySelector("#deleteButton").addEventListener("click", deleteSelected);
 
 function render() {

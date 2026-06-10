@@ -175,6 +175,14 @@ button {
   background: #d8d8d8;
 }
 
+.graph-node.is-ready .node-dot {
+  box-shadow: 0 0 0 0.16rem rgba(216, 216, 216, 0.12);
+}
+
+.graph-node.is-low-confidence .node-dot {
+  background: #8e8e8e;
+}
+
 .graph-node.is-selected .node-dot,
 .graph-node:hover .node-dot,
 .graph-node:focus-visible .node-dot {
@@ -367,6 +375,7 @@ input[type="range"] {
 }
 
 .if-then-box,
+.readiness-box,
 .suggestion {
   margin-bottom: 0.8rem;
   padding: 0.7rem;
@@ -384,6 +393,35 @@ input[type="range"] {
 
 .if-then-box p {
   margin: 0;
+}
+
+.readiness-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.readiness-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  color: #bfbfbf;
+  font-size: 0.78rem;
+}
+
+.readiness-item span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.readiness-mark {
+  color: #777777;
+  font-weight: 900;
+}
+
+.readiness-item.is-met .readiness-mark {
+  color: #dedede;
 }
 
 .suggestion.is-hidden {

@@ -30,6 +30,7 @@
       <nav class="right-rail" aria-label="Graph controls">
         <button id="inspectorToggle" type="button" aria-label="Toggle selected achievement editor">o</button>
         <button id="addChildButton" type="button" aria-label="Add supporting achievement">+</button>
+        <button id="nextNodeButton" type="button" aria-label="Review next unclear achievement">?</button>
       </nav>
 
       <section class="setup-panel" id="setupPanel" aria-label="Create achievement map">
@@ -99,6 +100,11 @@
           <p id="ifThenPreview"></p>
         </div>
 
+        <div class="readiness-box">
+          <span class="eyebrow">Readiness</span>
+          <div class="readiness-list" id="readinessList"></div>
+        </div>
+
         <div class="field-grid">
           <label>
             Confidence
@@ -119,6 +125,7 @@
 
         <div class="inspector-actions">
           <button id="completeButton" type="button">Toggle done</button>
+          <button id="shrinkButton" type="button">Make smaller</button>
           <button id="deleteButton" class="quiet-button danger-button" type="button">Delete</button>
         </div>
       </aside>
