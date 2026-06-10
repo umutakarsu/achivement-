@@ -16,7 +16,7 @@ const exampleNodes = [
   {
     id: "base-fitness",
     parentId: "top",
-    title: "Build a running base",
+    title: "Build running base",
     why: "Repeated easy runs make the bigger goal feel normal instead of heroic.",
     blocker: "Starting too hard and getting sore.",
     confidence: 80,
@@ -28,7 +28,7 @@ const exampleNodes = [
   {
     id: "fuel-recovery",
     parentId: "top",
-    title: "Learn fuel and recovery",
+    title: "Learn fuel recovery",
     why: "The goal becomes safer when my body has a recovery system.",
     blocker: "Forgetting meals after long sessions.",
     confidence: 60,
@@ -40,7 +40,7 @@ const exampleNodes = [
   {
     id: "shoes",
     parentId: "base-fitness",
-    title: "Choose shoes that fit",
+    title: "Choose fitted shoes",
     why: "Reducing pain makes the habit easier to repeat.",
     blocker: "Overthinking gear choices.",
     confidence: 90,
@@ -52,7 +52,7 @@ const exampleNodes = [
   {
     id: "routes",
     parentId: "base-fitness",
-    title: "Save default routes",
+    title: "Save run routes",
     why: "A default route removes decision fatigue.",
     blocker: "Weather and dark evenings.",
     confidence: 70,
@@ -76,7 +76,7 @@ const exampleNodes = [
   {
     id: "race-fuel",
     parentId: "fuel-recovery",
-    title: "Practice race fuel",
+    title: "Practice fueling",
     why: "Confidence grows when race day feels familiar.",
     blocker: "Trying new food too late.",
     confidence: 55,
@@ -99,6 +99,9 @@ const mapEl = document.querySelector("#achievementMap");
 const linkLayer = document.querySelector("#linkLayer");
 const template = document.querySelector("#nodeTemplate");
 const graphHint = document.querySelector("#graphHint");
+const modeLabel = document.querySelector("#modeLabel");
+const zoomLabel = document.querySelector("#zoomLabel");
+const readinessSummary = document.querySelector("#readinessSummary");
 const inspector = document.querySelector("#inspector");
 const inspectorPath = document.querySelector("#inspectorPath");
 const ifThenPreview = document.querySelector("#ifThenPreview");
@@ -115,6 +118,7 @@ const inputs = {
   confidence: document.querySelector("#confidenceInput"),
   friction: document.querySelector("#frictionInput"),
 };
+const focusButton = document.querySelector("#focusButton");
 
 const view = {
   scale: 1,
@@ -327,6 +331,7 @@ function renderGraph() {
 function renderHint() {
   if (!nodes.length) {
     graphHint.textContent = "";
+    readinessSummary.textContent = "0 clear";
     return;
   }
 
@@ -337,6 +342,8 @@ function renderHint() {
     nodes.reduce((total, node) => total + Number(node.confidence || 0), 0) / nodes.length,
   );
   const mode = view.focusMode ? "Local focus" : "Global graph";
+  modeLabel.textContent = mode;
+  readinessSummary.textContent = `${ready}/${nodes.length} clear`;
   graphHint.textContent = `${mode}. ${done}/${nodes.length} complete. ${ready}/${nodes.length} clear enough to act on. Average confidence ${avgConfidence}%. Next review: ${next?.title || "none"}. Scroll to zoom, drag empty space to pan.`;
 }
 
@@ -407,6 +414,8 @@ function applyViewTransform() {
   const transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
   mapEl.style.transform = transform;
   linkLayer.style.transform = transform;
+  zoomLabel.textContent = `${Math.round(view.scale * 100)}%`;
+  focusButton.classList.toggle("is-active", view.focusMode);
   graphShell.classList.toggle("is-zoomed-out", view.scale < 0.72);
   graphShell.classList.toggle("is-focus-mode", view.focusMode);
 }

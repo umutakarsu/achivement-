@@ -25,22 +25,50 @@
         <div id="achievementMap" class="graph-nodes" aria-label="Achievement nodes"></div>
       </section>
 
+      <aside class="graph-status" aria-label="Graph status">
+        <span id="modeLabel">Global graph</span>
+        <span id="zoomLabel">100%</span>
+        <span id="readinessSummary">0 clear</span>
+      </aside>
+
       <aside class="graph-hint" id="graphHint" aria-live="polite"></aside>
 
       <nav class="right-rail" aria-label="Graph controls">
-        <button id="zoomInButton" type="button" aria-label="Zoom in">+</button>
-        <button id="zoomOutButton" type="button" aria-label="Zoom out">-</button>
-        <button id="fitButton" type="button" aria-label="Fit graph">[]</button>
-        <button id="focusButton" type="button" aria-label="Toggle local graph focus">focus</button>
-        <button id="inspectorToggle" type="button" aria-label="Toggle selected achievement editor">o</button>
-        <button id="addChildButton" type="button" aria-label="Add supporting achievement">add</button>
-        <button id="nextNodeButton" type="button" aria-label="Review next unclear achievement">?</button>
+        <button id="zoomInButton" type="button" aria-label="Zoom in" data-tip="Zoom in">+</button>
+        <button id="zoomOutButton" type="button" aria-label="Zoom out" data-tip="Zoom out">-</button>
+        <button id="fitButton" type="button" aria-label="Fit graph" data-tip="Reset view">Fit</button>
+        <button id="focusButton" type="button" aria-label="Toggle local graph focus" data-tip="Local graph">
+          Local
+        </button>
+        <button
+          id="inspectorToggle"
+          type="button"
+          aria-label="Toggle selected achievement editor"
+          data-tip="Edit node"
+        >
+          Edit
+        </button>
+        <button id="addChildButton" type="button" aria-label="Add supporting achievement" data-tip="Add child">
+          Add
+        </button>
+        <button
+          id="nextNodeButton"
+          type="button"
+          aria-label="Review next unclear achievement"
+          data-tip="Next unclear"
+        >
+          Next
+        </button>
       </nav>
 
       <section class="setup-panel" id="setupPanel" aria-label="Create achievement map">
         <div class="setup-card">
           <p class="eyebrow">Start with the peak</p>
           <h2>What is the achievement you want at the top?</h2>
+          <p class="setup-copy">
+            Keep the graph simple first. Add only the achievements that must become true before the peak
+            can happen.
+          </p>
           <label>
             Top achievement
             <input
@@ -57,6 +85,7 @@
               rows="5"
               placeholder="One per line, like: validate the idea&#10;build the first version&#10;get 10 users"
             ></textarea>
+            <span class="field-help">These become the first linked nodes under your top achievement.</span>
           </label>
           <div class="setup-actions">
             <button id="createMapButton" type="button">Create graph</button>
@@ -76,27 +105,27 @@
 
         <label>
           Achievement
-          <input id="titleInput" type="text" />
+          <input id="titleInput" type="text" placeholder="Specific achievement, not a vague theme" />
         </label>
 
         <label>
           Why this matters
-          <textarea id="whyInput" rows="3"></textarea>
+          <textarea id="whyInput" rows="3" placeholder="I want this because..."></textarea>
         </label>
 
         <label>
           Proof it is achieved
-          <textarea id="evidenceInput" rows="2"></textarea>
+          <textarea id="evidenceInput" rows="2" placeholder="I will know this is done when..."></textarea>
         </label>
 
         <label>
           Likely blocker
-          <textarea id="blockerInput" rows="2"></textarea>
+          <textarea id="blockerInput" rows="2" placeholder="The thing most likely to stop me is..."></textarea>
         </label>
 
         <label>
           Smallest next action
-          <textarea id="actionInput" rows="2"></textarea>
+          <textarea id="actionInput" rows="2" placeholder="The next action I can take is..."></textarea>
         </label>
 
         <div class="if-then-box">

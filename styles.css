@@ -11,6 +11,7 @@
   --link-hot: #777777;
   --node: #b9b9b9;
   --node-dim: #6d6d6d;
+  --warning: #d5a86b;
   --danger: #d47a7a;
   --focus: #8fb8ff;
 }
@@ -200,7 +201,7 @@ button {
 }
 
 .graph-node.is-low-confidence .node-dot {
-  background: #8e8e8e;
+  background: var(--warning);
 }
 
 .graph-node.is-selected .node-dot,
@@ -234,17 +235,73 @@ button {
   right: 0.9rem;
   z-index: 7;
   display: grid;
-  gap: 1rem;
+  gap: 0.25rem;
+  padding: 0.3rem;
+  border: 1px solid rgba(80, 80, 80, 0.48);
+  border-radius: 8px;
+  background: rgba(28, 28, 28, 0.72);
+  backdrop-filter: blur(12px);
 }
 
 .right-rail button {
+  position: relative;
   display: grid;
-  min-width: 2rem;
-  height: 2rem;
+  min-width: 3rem;
+  height: 1.95rem;
   place-items: center;
   padding: 0 0.35rem;
   color: #a8a8a8;
-  font-size: 0.95rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+}
+
+.right-rail button.is-active {
+  background: #303030;
+  color: #eeeeee;
+}
+
+.right-rail button:hover::before,
+.right-rail button:focus-visible::before {
+  content: attr(data-tip);
+  position: absolute;
+  right: calc(100% + 0.55rem);
+  top: 50%;
+  width: max-content;
+  max-width: 10rem;
+  padding: 0.32rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(34, 34, 34, 0.96);
+  color: #e8e8e8;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.graph-status {
+  position: absolute;
+  top: 3.7rem;
+  left: 1rem;
+  z-index: 5;
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  flex-wrap: wrap;
+  max-width: min(34rem, calc(100vw - 6rem));
+  pointer-events: none;
+}
+
+.graph-status span {
+  padding: 0.28rem 0.5rem;
+  border: 1px solid rgba(80, 80, 80, 0.48);
+  border-radius: 999px;
+  background: rgba(28, 28, 28, 0.72);
+  color: #b9b9b9;
+  font-size: 0.72rem;
+  font-weight: 800;
+  backdrop-filter: blur(12px);
 }
 
 .graph-hint {
@@ -290,6 +347,13 @@ button {
   margin: 0 0 1rem;
   font-size: 1.5rem;
   line-height: 1.1;
+}
+
+.setup-copy {
+  margin: -0.35rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .setup-actions,
@@ -363,6 +427,13 @@ label {
   font-weight: 800;
 }
 
+.field-help {
+  color: #858585;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
 input,
 textarea,
 select {
@@ -372,6 +443,11 @@ select {
   background: #1f1f1f;
   color: var(--ink);
   padding: 0.58rem;
+}
+
+::placeholder {
+  color: #707070;
+  opacity: 1;
 }
 
 textarea {
@@ -485,6 +561,16 @@ input[type="range"] {
     min-height: 42rem;
   }
 
+  .graph-status {
+    top: 3.25rem;
+    left: 0.7rem;
+    max-width: calc(100vw - 5.5rem);
+  }
+
+  .graph-status span {
+    font-size: 0.66rem;
+  }
+
   .graph-node {
     width: 6.2rem;
   }
@@ -495,6 +581,17 @@ input[type="range"] {
 
   .graph-hint {
     display: none;
+  }
+
+  .right-rail {
+    top: 4rem;
+    right: 0.5rem;
+  }
+
+  .right-rail button {
+    min-width: 2.5rem;
+    height: 1.8rem;
+    font-size: 0.64rem;
   }
 
   .inspector {
