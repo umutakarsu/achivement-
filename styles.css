@@ -304,6 +304,74 @@ button {
   backdrop-filter: blur(12px);
 }
 
+.node-search {
+  position: absolute;
+  top: 3.65rem;
+  left: 50%;
+  z-index: 7;
+  width: min(22rem, calc(100vw - 8rem));
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.node-search input {
+  height: 2rem;
+  padding: 0 0.7rem;
+  border-color: rgba(80, 80, 80, 0.58);
+  background: rgba(28, 28, 28, 0.78);
+  color: #eeeeee;
+  font-size: 0.78rem;
+  backdrop-filter: blur(12px);
+}
+
+.search-results {
+  display: none;
+  max-height: 13rem;
+  margin-top: 0.35rem;
+  overflow: auto;
+  border: 1px solid rgba(80, 80, 80, 0.58);
+  border-radius: 8px;
+  background: rgba(31, 31, 31, 0.96);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+}
+
+.node-search.is-open .search-results {
+  display: grid;
+}
+
+.search-result {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid rgba(80, 80, 80, 0.32);
+  border-radius: 0;
+  background: transparent;
+  color: #e8e8e8;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+}
+
+.search-result:last-child {
+  border-bottom: 0;
+}
+
+.search-result:hover,
+.search-result:focus-visible {
+  background: #303030;
+}
+
+.search-result span:first-child {
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.search-result span:last-child {
+  color: #9c9c9c;
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
 .graph-hint {
   position: absolute;
   left: 1rem;
@@ -341,6 +409,37 @@ button {
 .setup-card {
   width: min(36rem, 100%);
   padding: 1.2rem;
+}
+
+.setup-card-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.setup-close-button {
+  display: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 1px solid rgba(80, 80, 80, 0.7);
+  border-radius: 6px;
+  background: rgba(28, 28, 28, 0.74);
+  color: #a8a8a8;
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.setup-panel.can-close .setup-close-button {
+  display: grid;
+  place-items: center;
+}
+
+.setup-close-button:hover,
+.setup-close-button:focus-visible {
+  background: #303030;
+  color: #f0f0f0;
 }
 
 .setup-card h2 {
@@ -486,9 +585,35 @@ button {
   color: #8f8f8f;
 }
 
+.local-depth-control {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.62rem 0.68rem;
+  border: 1px solid #3e3e3e;
+  border-radius: 8px;
+  background: rgba(24, 24, 24, 0.62);
+}
+
+.local-depth-control label {
+  margin: 0;
+}
+
+.local-depth-control input {
+  padding: 0;
+}
+
+#localDepthLabel {
+  color: #bdbdbd;
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .preview-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 0.45rem;
 }
 
@@ -701,11 +826,18 @@ input[type="range"] {
   .graph-status {
     top: 3.25rem;
     left: 0.7rem;
-    max-width: calc(100vw - 5.5rem);
+    max-width: calc(55vw - 1rem);
   }
 
   .graph-status span {
     font-size: 0.66rem;
+  }
+
+  .node-search {
+    top: 6.7rem;
+    left: 0.7rem;
+    width: calc(100vw - 5.6rem);
+    transform: none;
   }
 
   .graph-node {

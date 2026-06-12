@@ -88,9 +88,11 @@ const exampleNodes = [
 ];
 
 let nodes = loadNodes();
-let selectedId = nodes[0]?.id || null;
+let selectedId = null;
+let setupOpen = nodes.length === 0;
 
 const setupPanel = document.querySelector("#setupPanel");
+const closeSetupButton = document.querySelector("#closeSetupButton");
 const setupGoalInput = document.querySelector("#setupGoalInput");
 const setupPrereqInput = document.querySelector("#setupPrereqInput");
 const graphShell = document.querySelector(".graph-shell");
@@ -102,6 +104,9 @@ const graphHint = document.querySelector("#graphHint");
 const modeLabel = document.querySelector("#modeLabel");
 const zoomLabel = document.querySelector("#zoomLabel");
 const readinessSummary = document.querySelector("#readinessSummary");
+const nodeSearch = document.querySelector(".node-search");
+const nodeSearchInput = document.querySelector("#nodeSearchInput");
+const searchResults = document.querySelector("#searchResults");
 const inspector = document.querySelector("#inspector");
 const inspectorPath = document.querySelector("#inspectorPath");
 const previewTitle = document.querySelector("#previewTitle");
@@ -109,6 +114,8 @@ const previewMeta = document.querySelector("#previewMeta");
 const previewWhy = document.querySelector("#previewWhy");
 const previewAction = document.querySelector("#previewAction");
 const relationChips = document.querySelector("#relationChips");
+const localDepthInput = document.querySelector("#localDepthInput");
+const localDepthLabel = document.querySelector("#localDepthLabel");
 const ifThenPreview = document.querySelector("#ifThenPreview");
 const suggestionBox = document.querySelector("#suggestionBox");
 const readinessList = document.querySelector("#readinessList");
@@ -131,6 +138,7 @@ const view = {
   x: 0,
   y: 0,
   focusMode: false,
+  localDepth: 1,
   isPanning: false,
   panStartX: 0,
   panStartY: 0,
@@ -167,7 +175,7 @@ function makeId(prefix = "node") {
 }
 
 function getSelected() {
-  return nodes.find((node) => node.id === selectedId) || nodes[0] || null;
+  return nodes.find((node) => node.id === selectedId) || null;
 }
 
 function childrenOf(parentId) {
@@ -195,15 +203,18 @@ function getRelatedIds() {
   const selected = getSelected();
   if (!selected) return related;
 
-  related.add(selected.id);
-  let current = selected;
-  while (current.parentId) {
-    related.add(current.parentId);
-    current = getParent(current);
-    if (!current) break;
+  const queue = [{ id: selected.id, depth: 0 }];
+  while (queue.length) {
+    const current = queue.shift();
+    if (related.has(current.id) || current.depth > view.localDepth) continue;
+    related.add(current.id);
+
+    const node = nodes.find((candidate) => candidate.id === current.id);
+    if (!node) continue;
+    if (node.parentId) queue.push({ id: node.parentId, depth: current.depth + 1 });
+    childrenOf(node.id).forEach((child) => queue.push({ id: child.id, depth: current.depth + 1 }));
   }
 
-  childrenOf(selected.id).forEach((child) => related.add(child.id));
   return related;
 }
 
@@ -350,11 +361,12 @@ function renderHint() {
   const mode = view.focusMode ? "Local focus" : "Global graph";
   modeLabel.textContent = mode;
   readinessSummary.textContent = `${ready}/${nodes.length} clear`;
-  graphHint.textContent = `${mode}. ${done}/${nodes.length} complete. ${ready}/${nodes.length} clear enough to act on. Average confidence ${avgConfidence}%. Next review: ${next?.title || "none"}. Scroll to zoom, drag empty space to pan.`;
+  graphHint.textContent = `${mode}. ${done}/${nodes.length} complete. ${ready}/${nodes.length} clear enough to act on. Average confidence ${avgConfidence}%. Next review: ${next?.title || "none"}. Press / to find, scroll to zoom, drag empty space to pan.`;
 }
 
 function renderSetup() {
-  setupPanel.classList.toggle("is-hidden", nodes.length > 0);
+  setupPanel.classList.toggle("is-hidden", !setupOpen);
+  setupPanel.classList.toggle("can-close", nodes.length > 0);
 }
 
 function renderInspector() {
@@ -374,7 +386,6 @@ function renderInspector() {
   inputs.confidence.value = node.confidence;
   inputs.friction.value = node.friction;
   confidenceValue.textContent = `${node.confidence}%`;
-  inspectorPath.textContent = getDepth(node) === 0 ? "Top achievement" : "Supporting achievement";
   ifThenPreview.textContent = buildIfThen(node);
   renderReadiness(node);
   renderSuggestion(node);
@@ -385,6 +396,9 @@ function renderPreview(node) {
   const met = checks.filter((check) => check.met).length;
   const children = childrenOf(node.id);
   const parent = getParent(node);
+  const visibleIds = getVisibleIds();
+  const relatedIds = getRelatedIds();
+  const contextCount = view.focusMode ? `${visibleIds.size} visible` : `${relatedIds.size} linked`;
 
   previewTitle.textContent = node.title || "Untitled achievement";
   previewMeta.textContent = `${node.done ? "Done" : "Open"} - ${node.confidence}% belief - ${met}/${checks.length} ready`;
@@ -411,6 +425,14 @@ function renderPreview(node) {
     chip.textContent = "No supporting nodes yet";
     relationChips.append(chip);
   }
+
+  localDepthInput.value = String(view.localDepth);
+  localDepthLabel.textContent = `${view.localDepth} ${view.localDepth === 1 ? "step" : "steps"}`;
+  document.querySelector("#globalViewButton").textContent = view.focusMode ? "Global view" : "Focus local";
+  inspectorPath.textContent =
+    getDepth(node) === 0
+      ? `Top achievement - ${contextCount}`
+      : `Supporting achievement - ${contextCount}`;
 }
 
 function createRelationChip(label, id) {
@@ -453,12 +475,20 @@ function renderReadiness(node) {
   });
 }
 
-function selectNode(id) {
+function selectNode(id, options = {}) {
   selectedId = id;
-  view.focusMode = true;
+  if (options.focus) view.focusMode = true;
   inspector.classList.add("is-open");
-  inspector.classList.remove("is-editing");
+  inspector.classList.toggle("is-editing", Boolean(options.editing));
   render();
+}
+
+function selectNodeFromSearch(id) {
+  nodeSearchInput.value = "";
+  nodeSearch.classList.remove("is-open");
+  searchResults.innerHTML = "";
+  selectNode(id);
+  centerNode(id);
 }
 
 function clampScale(scale) {
@@ -501,8 +531,31 @@ function resetView() {
 }
 
 function toggleFocusMode() {
+  if (!selectedId) {
+    selectedId = nodes[0]?.id || null;
+  }
+  if (!selectedId) return;
   view.focusMode = !view.focusMode;
-  renderGraph();
+  inspector.classList.add("is-open");
+  render();
+}
+
+function centerNode(id) {
+  const position = getGraphLayout().get(id);
+  if (!position) return;
+
+  const rect = graphCanvas.getBoundingClientRect();
+  view.x = rect.width / 2 - (position.x / 100) * rect.width * view.scale;
+  view.y = rect.height / 2 - (position.y / 100) * rect.height * view.scale;
+  applyViewTransform();
+}
+
+function clearSelection() {
+  selectedId = null;
+  view.focusMode = false;
+  inspector.classList.remove("is-open");
+  inspector.classList.remove("is-editing");
+  render();
 }
 
 function getPointerMetrics() {
@@ -521,6 +574,36 @@ function selectNextUnclearNode() {
   const next = getNextUnclearNode();
   if (!next) return;
   selectNode(next.id);
+}
+
+function renderSearchResults() {
+  const query = nodeSearchInput.value.trim().toLowerCase();
+  searchResults.innerHTML = "";
+  nodeSearch.classList.toggle("is-open", Boolean(query));
+  if (!query) return;
+
+  const matches = nodes
+    .filter((node) =>
+      [node.title, node.why, node.action, node.blocker].some((value) => value.toLowerCase().includes(query)),
+    )
+    .slice(0, 8);
+
+  if (!matches.length) {
+    const empty = document.createElement("div");
+    empty.className = "search-result";
+    empty.innerHTML = "<span>No matching nodes</span><span>Try a goal, blocker, or next action</span>";
+    searchResults.append(empty);
+    return;
+  }
+
+  matches.forEach((node) => {
+    const result = document.createElement("button");
+    result.className = "search-result";
+    result.type = "button";
+    result.innerHTML = `<span>${node.title}</span><span>${getDepth(node) === 0 ? "Top achievement" : "Supporting achievement"} - ${node.confidence}% belief</span>`;
+    result.addEventListener("click", () => selectNodeFromSearch(node.id));
+    searchResults.append(result);
+  });
 }
 
 function updateSelected(key, value) {
@@ -574,16 +657,18 @@ function createInitialMap() {
   ];
 
   selectedId = topId;
+  setupOpen = false;
   inspector.classList.add("is-open");
   inspector.classList.remove("is-editing");
-  view.focusMode = true;
+  view.focusMode = false;
   save();
   render();
 }
 
 function useExample() {
   nodes = clone(exampleNodes);
-  selectedId = nodes[0].id;
+  selectedId = null;
+  setupOpen = false;
   inspector.classList.remove("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
@@ -591,10 +676,9 @@ function useExample() {
   render();
 }
 
-function createNewMap() {
-  nodes = [];
+function openNewMap() {
+  setupOpen = true;
   selectedId = null;
-  localStorage.removeItem(STORAGE_KEY);
   inspector.classList.remove("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
@@ -604,10 +688,18 @@ function createNewMap() {
   setupGoalInput.focus();
 }
 
+function closeSetup() {
+  if (!nodes.length) return;
+  setupOpen = false;
+  setupGoalInput.value = "";
+  setupPrereqInput.value = "";
+  render();
+}
+
 function addSupportingAchievement() {
   const parent = getSelected() || nodes[0];
   if (!parent) {
-    createNewMap();
+    openNewMap();
     return;
   }
 
@@ -627,7 +719,6 @@ function addSupportingAchievement() {
   selectedId = id;
   inspector.classList.add("is-open");
   inspector.classList.add("is-editing");
-  view.focusMode = true;
   save();
   render();
 }
@@ -655,7 +746,6 @@ function makeSelectedSmaller() {
   selectedId = id;
   inspector.classList.add("is-open");
   inspector.classList.remove("is-editing");
-  view.focusMode = true;
   save();
   render();
 }
@@ -692,7 +782,8 @@ Object.entries(inputs).forEach(([key, input]) => {
 
 document.querySelector("#createMapButton").addEventListener("click", createInitialMap);
 document.querySelector("#useExampleButton").addEventListener("click", useExample);
-document.querySelector("#newMapButton").addEventListener("click", createNewMap);
+document.querySelector("#newMapButton").addEventListener("click", openNewMap);
+closeSetupButton.addEventListener("click", closeSetup);
 document.querySelector("#resetButton").addEventListener("click", useExample);
 document.querySelector("#inspectorToggle").addEventListener("click", () => {
   if (!nodes.length) return;
@@ -700,10 +791,7 @@ document.querySelector("#inspectorToggle").addEventListener("click", () => {
   inspector.classList.toggle("is-editing");
 });
 document.querySelector("#closeInspectorButton").addEventListener("click", () => {
-  inspector.classList.remove("is-open");
-  inspector.classList.remove("is-editing");
-  view.focusMode = false;
-  renderGraph();
+  clearSelection();
 });
 document.querySelector("#addChildButton").addEventListener("click", addSupportingAchievement);
 document.querySelector("#nextNodeButton").addEventListener("click", selectNextUnclearNode);
@@ -711,11 +799,20 @@ document.querySelector("#zoomInButton").addEventListener("click", () => zoomBy(1
 document.querySelector("#zoomOutButton").addEventListener("click", () => zoomBy(0.85));
 document.querySelector("#fitButton").addEventListener("click", resetView);
 document.querySelector("#focusButton").addEventListener("click", toggleFocusMode);
+localDepthInput.addEventListener("input", () => {
+  view.localDepth = Number(localDepthInput.value);
+  renderGraph();
+  renderInspector();
+});
 document.querySelector("#editDetailsButton").addEventListener("click", () => {
   inspector.classList.add("is-editing");
   inputs.title.focus();
 });
 document.querySelector("#previewAddButton").addEventListener("click", addSupportingAchievement);
+document.querySelector("#globalViewButton").addEventListener("click", () => {
+  view.focusMode = !view.focusMode;
+  render();
+});
 document.querySelector("#previewDoneButton").addEventListener("click", () => {
   const node = getSelected();
   if (!node) return;
@@ -725,6 +822,12 @@ document.querySelector("#previewDoneButton").addEventListener("click", () => {
 });
 document.querySelector("#shrinkButton").addEventListener("click", makeSelectedSmaller);
 document.querySelector("#deleteButton").addEventListener("click", deleteSelected);
+nodeSearchInput.addEventListener("input", renderSearchResults);
+nodeSearchInput.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  const firstResult = searchResults.querySelector(".search-result");
+  if (firstResult?.tagName === "BUTTON") firstResult.click();
+});
 
 graphCanvas.addEventListener(
   "wheel",
@@ -792,7 +895,22 @@ graphCanvas.addEventListener("pointercancel", () => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    if (setupOpen && nodes.length) {
+      closeSetup();
+      return;
+    }
+    nodeSearchInput.value = "";
+    nodeSearch.classList.remove("is-open");
+    searchResults.innerHTML = "";
+    clearSelection();
+    return;
+  }
   if (event.target.matches("input, textarea, select")) return;
+  if (event.key === "/") {
+    event.preventDefault();
+    nodeSearchInput.focus();
+  }
   if (event.key === "+" || event.key === "=") zoomBy(1.18);
   if (event.key === "-") zoomBy(0.85);
   if (event.key === "0") resetView();

@@ -31,6 +31,11 @@
         <span id="readinessSummary">0 clear</span>
       </aside>
 
+      <section class="node-search" aria-label="Find achievement">
+        <input id="nodeSearchInput" type="search" placeholder="Find node..." autocomplete="off" />
+        <div class="search-results" id="searchResults"></div>
+      </section>
+
       <aside class="graph-hint" id="graphHint" aria-live="polite"></aside>
 
       <nav class="right-rail" aria-label="Graph controls">
@@ -63,11 +68,18 @@
 
       <section class="setup-panel" id="setupPanel" aria-label="Create achievement map">
         <div class="setup-card">
-          <p class="eyebrow">Start with the peak</p>
-          <h2>What is the achievement you want at the top?</h2>
+          <header class="setup-card-header">
+            <div>
+              <p class="eyebrow">Start with the peak</p>
+              <h2>What is the achievement you want at the top?</h2>
+            </div>
+            <button id="closeSetupButton" class="setup-close-button" type="button" aria-label="Close new map panel">
+              x
+            </button>
+          </header>
           <p class="setup-copy">
             Keep the graph simple first. Add only the achievements that must become true before the peak
-            can happen.
+            can happen. Your current graph stays unchanged until you create the new one.
           </p>
           <label>
             Top achievement
@@ -120,10 +132,19 @@
             <div class="relation-chips" id="relationChips"></div>
           </div>
 
+          <div class="local-depth-control">
+            <label>
+              Local depth
+              <input id="localDepthInput" type="range" min="1" max="3" step="1" value="1" />
+            </label>
+            <span id="localDepthLabel">1 step</span>
+          </div>
+
           <div class="preview-actions">
             <button id="editDetailsButton" type="button">Edit details</button>
             <button id="previewDoneButton" type="button">Toggle done</button>
             <button id="previewAddButton" type="button">Add child</button>
+            <button id="globalViewButton" type="button">Global view</button>
           </div>
         </section>
 
