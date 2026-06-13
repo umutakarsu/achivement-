@@ -344,9 +344,15 @@ function renderGraph() {
     line.setAttribute("y1", start.y);
     line.setAttribute("x2", end.x);
     line.setAttribute("y2", end.y);
+    line.dataset.parentId = node.parentId;
+    line.dataset.childId = node.id;
     line.classList.add("graph-link");
     line.style.display = visibleIds.has(node.id) && visibleIds.has(node.parentId) ? "" : "none";
-    line.classList.toggle("is-related", relatedIds.has(node.id) && relatedIds.has(node.parentId));
+    line.classList.toggle(
+      "is-context",
+      relatedIds.has(node.id) && relatedIds.has(node.parentId) && node.parentId === selectedId && !node.done,
+    );
+    line.classList.toggle("is-complete", node.done);
     linkLayer.append(line);
   });
 

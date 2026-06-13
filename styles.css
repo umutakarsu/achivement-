@@ -184,8 +184,13 @@ button {
   stroke-linecap: round;
 }
 
-.graph-link.is-related {
-  stroke: rgba(220, 220, 220, 0.82);
+.graph-link.is-context {
+  stroke: rgba(180, 180, 180, 0.36);
+  stroke-width: 0.2;
+}
+
+.graph-link.is-complete {
+  stroke: rgba(214, 242, 196, 0.76);
   stroke-width: 0.28;
 }
 
