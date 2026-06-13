@@ -105,6 +105,10 @@ const graphHint = document.querySelector("#graphHint");
 const modeLabel = document.querySelector("#modeLabel");
 const zoomLabel = document.querySelector("#zoomLabel");
 const readinessSummary = document.querySelector("#readinessSummary");
+const completionToast = document.querySelector("#completionToast");
+const completionTitle = document.querySelector("#completionTitle");
+const completionCopy = document.querySelector("#completionCopy");
+const completionNextButton = document.querySelector("#completionNextButton");
 const focusTray = document.querySelector("#focusTray");
 const focusProgressBar = document.querySelector("#focusProgressBar");
 const focusProgressText = document.querySelector("#focusProgressText");
@@ -163,6 +167,7 @@ const view = {
 };
 
 const activePointers = new Map();
+let completionTimer = null;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -410,6 +415,26 @@ function renderFocusTray() {
   ritualPlan.textContent = shorten(buildIfThen(next || top), "If the blocker appears, take the next move.", 68);
   focusOpenButton.disabled = !next;
   focusOpenButton.textContent = next?.done ? "Review" : "Start move";
+}
+
+function showCompletion(node) {
+  const done = nodes.filter((candidate) => candidate.done).length;
+  const progress = Math.round((done / nodes.length) * 100);
+  const next = getNextUnclearNode();
+
+  clearTimeout(completionTimer);
+  completionTitle.textContent = `${node.title} is done.`;
+  completionCopy.textContent = next
+    ? `${progress}% of the path is complete. Next: ${next.title}.`
+    : "Every visible move is complete. Take a second to notice the promise you kept.";
+  completionNextButton.hidden = !next || next.id === node.id;
+  completionToast.classList.add("is-visible");
+  graphShell.classList.add("is-celebrating");
+
+  completionTimer = setTimeout(() => {
+    completionToast.classList.remove("is-visible");
+    graphShell.classList.remove("is-celebrating");
+  }, 4200);
 }
 
 function renderSetup() {
@@ -887,9 +912,17 @@ document.querySelector("#globalViewButton").addEventListener("click", () => {
 document.querySelector("#previewDoneButton").addEventListener("click", () => {
   const node = getSelected();
   if (!node) return;
+  const wasDone = node.done;
   node.done = !node.done;
   save();
   render();
+  if (!wasDone && node.done) showCompletion(node);
+});
+completionNextButton.addEventListener("click", () => {
+  completionToast.classList.remove("is-visible");
+  graphShell.classList.remove("is-celebrating");
+  ritualCollapsed = true;
+  selectNextUnclearNode();
 });
 document.querySelector("#shrinkButton").addEventListener("click", makeSelectedSmaller);
 document.querySelector("#deleteButton").addEventListener("click", deleteSelected);

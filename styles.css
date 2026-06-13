@@ -60,6 +60,10 @@ button {
   pointer-events: none;
 }
 
+.graph-shell.is-celebrating .graph-node.is-selected .node-dot {
+  animation: completionPulse 900ms ease-out;
+}
+
 .graph-shell.is-ritual-open .right-rail,
 .graph-shell.is-ritual-open .node-search,
 .graph-shell.is-ritual-open .graph-status,
@@ -424,6 +428,88 @@ button {
   color: #8e8e8e;
   font-size: 0.82rem;
   line-height: 1.45;
+}
+
+.completion-toast {
+  position: absolute;
+  top: 4.2rem;
+  left: 50%;
+  z-index: 9;
+  display: grid;
+  gap: 0.3rem;
+  width: min(24rem, calc(100vw - 2rem));
+  padding: 0.82rem 0.9rem;
+  border: 1px solid rgba(214, 242, 196, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(38, 45, 34, 0.94), rgba(24, 24, 24, 0.94)),
+    rgba(24, 24, 24, 0.94);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.4),
+    0 0 32px rgba(214, 242, 196, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -0.6rem);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.completion-toast.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+
+.completion-toast .eyebrow {
+  margin: 0;
+  color: rgba(214, 242, 196, 0.86);
+}
+
+.completion-toast strong {
+  color: #f5f5f5;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.completion-toast p {
+  margin: 0;
+  color: #bcbcbc;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.completion-toast button {
+  justify-self: start;
+  margin-top: 0.2rem;
+  border: 1px solid rgba(214, 242, 196, 0.26);
+  border-radius: 6px;
+  padding: 0.46rem 0.62rem;
+  background: rgba(214, 242, 196, 0.92);
+  color: #151515;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.completion-toast button:hover,
+.completion-toast button:focus-visible {
+  background: #efffe7;
+}
+
+@keyframes completionPulse {
+  0% {
+    box-shadow:
+      0 0 0 0 rgba(214, 242, 196, 0.36),
+      0 0 0 0.18rem rgba(255, 255, 255, 0.13),
+      0 0 26px rgba(255, 255, 255, 0.16);
+  }
+
+  100% {
+    box-shadow:
+      0 0 0 1.3rem rgba(214, 242, 196, 0),
+      0 0 0 0.18rem rgba(255, 255, 255, 0.13),
+      0 0 26px rgba(255, 255, 255, 0.16);
+  }
 }
 
 .focus-tray {
