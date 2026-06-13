@@ -597,6 +597,7 @@ function applyViewTransform() {
   focusButton.classList.toggle("is-active", view.focusMode);
   graphShell.classList.toggle("is-zoomed-out", view.scale < 0.72);
   graphShell.classList.toggle("is-focus-mode", view.focusMode);
+  graphShell.classList.toggle("has-selection", Boolean(selectedId));
 }
 
 function zoomAt(clientX, clientY, nextScale) {
