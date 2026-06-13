@@ -42,12 +42,25 @@
         <div class="focus-progress" aria-hidden="true">
           <span id="focusProgressBar"></span>
         </div>
+        <div class="focus-kicker">
+          <span class="eyebrow">Today</span>
+          <span id="focusProgressText">0% complete</span>
+        </div>
         <div class="focus-copy">
-          <span class="eyebrow">Next move</span>
           <strong id="focusNodeTitle">Choose a goal</strong>
+          <p id="focusNodeWhy">Choose the move that makes the whole path lighter.</p>
           <p id="focusNodeAction">Build the first visible step toward the peak.</p>
         </div>
-        <button id="focusOpenButton" type="button">Open</button>
+        <div class="ritual-woop" aria-label="Daily plan">
+          <span><strong>Wish</strong><em id="ritualWish">Make the peak real</em></span>
+          <span><strong>Outcome</strong><em id="ritualOutcome">Feel progress today</em></span>
+          <span><strong>Obstacle</strong><em id="ritualObstacle">The likely blocker</em></span>
+          <span><strong>Plan</strong><em id="ritualPlan">If it appears, take the next move</em></span>
+        </div>
+        <div class="focus-actions">
+          <button id="focusOpenButton" type="button">Start move</button>
+          <button id="exploreMapButton" class="quiet-button" type="button">Explore map</button>
+        </div>
       </section>
 
       <nav class="right-rail" aria-label="Graph controls">

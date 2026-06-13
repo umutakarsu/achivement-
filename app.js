@@ -90,6 +90,7 @@ const exampleNodes = [
 let nodes = loadNodes();
 let selectedId = null;
 let setupOpen = nodes.length === 0;
+let ritualCollapsed = false;
 
 const setupPanel = document.querySelector("#setupPanel");
 const closeSetupButton = document.querySelector("#closeSetupButton");
@@ -106,9 +107,16 @@ const zoomLabel = document.querySelector("#zoomLabel");
 const readinessSummary = document.querySelector("#readinessSummary");
 const focusTray = document.querySelector("#focusTray");
 const focusProgressBar = document.querySelector("#focusProgressBar");
+const focusProgressText = document.querySelector("#focusProgressText");
 const focusNodeTitle = document.querySelector("#focusNodeTitle");
+const focusNodeWhy = document.querySelector("#focusNodeWhy");
 const focusNodeAction = document.querySelector("#focusNodeAction");
 const focusOpenButton = document.querySelector("#focusOpenButton");
+const exploreMapButton = document.querySelector("#exploreMapButton");
+const ritualWish = document.querySelector("#ritualWish");
+const ritualOutcome = document.querySelector("#ritualOutcome");
+const ritualObstacle = document.querySelector("#ritualObstacle");
+const ritualPlan = document.querySelector("#ritualPlan");
 const nodeSearch = document.querySelector(".node-search");
 const nodeSearchInput = document.querySelector("#nodeSearchInput");
 const searchResults = document.querySelector("#searchResults");
@@ -382,17 +390,26 @@ function renderHint() {
 
 function renderFocusTray() {
   focusTray.classList.toggle("is-hidden", !nodes.length || setupOpen);
+  graphShell.classList.toggle("is-ritual-open", Boolean(nodes.length && !setupOpen && !ritualCollapsed));
+  focusTray.classList.toggle("is-collapsed", ritualCollapsed);
   if (!nodes.length) return;
 
   const done = nodes.filter((node) => node.done).length;
   const next = getNextUnclearNode();
+  const top = nodes.find((node) => !node.parentId) || nodes[0];
   const progress = Math.round((done / nodes.length) * 100);
 
   focusProgressBar.style.width = `${progress}%`;
+  focusProgressText.textContent = `${progress}% complete`;
   focusNodeTitle.textContent = next?.title || "Map complete";
+  focusNodeWhy.textContent = shorten(next?.why, "This is the smallest move that makes the larger path easier.");
   focusNodeAction.textContent = next?.action?.trim() || "Define the smallest visible action.";
+  ritualWish.textContent = shorten(top?.title, "Make the peak real", 48);
+  ritualOutcome.textContent = shorten(next?.evidence, "Know what done looks like", 48);
+  ritualObstacle.textContent = shorten(next?.blocker, "The likely blocker", 48);
+  ritualPlan.textContent = shorten(buildIfThen(next || top), "If the blocker appears, take the next move.", 68);
   focusOpenButton.disabled = !next;
-  focusOpenButton.textContent = next?.done ? "Review" : "Open";
+  focusOpenButton.textContent = next?.done ? "Review" : "Start move";
 }
 
 function renderSetup() {
@@ -478,9 +495,16 @@ function createRelationChip(label, id) {
 }
 
 function buildIfThen(node) {
-  const blocker = node.blocker.trim() || "the likely blocker appears";
-  const action = node.action.trim() || "take the smallest next action";
-  return `If ${blocker.toLowerCase()}, then I will ${action.replace(/\.$/, "").toLowerCase()}.`;
+  const blocker = (node.blocker.trim() || "the likely blocker appears").replace(/[.!?]+$/, "");
+  const action = (node.action.trim() || "take the smallest next action").replace(/[.!?]+$/, "");
+  const sentenceBlocker = blocker.charAt(0).toLowerCase() + blocker.slice(1);
+  const sentenceAction = action.charAt(0).toLowerCase() + action.slice(1);
+  return `If ${sentenceBlocker}, then I will ${sentenceAction}.`;
+}
+
+function shorten(value, fallback, limit = 74) {
+  const text = value?.trim() || fallback;
+  return text.length > limit ? `${text.slice(0, limit - 3).trim()}...` : text;
 }
 
 function renderSuggestion(node) {
@@ -510,6 +534,7 @@ function renderReadiness(node) {
 
 function selectNode(id, options = {}) {
   selectedId = id;
+  ritualCollapsed = true;
   if (options.focus) view.focusMode = true;
   inspector.classList.add("is-open");
   inspector.classList.toggle("is-editing", Boolean(options.editing));
@@ -692,6 +717,7 @@ function createInitialMap() {
 
   selectedId = topId;
   setupOpen = false;
+  ritualCollapsed = false;
   inspector.classList.add("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
@@ -703,6 +729,7 @@ function useExample() {
   nodes = clone(exampleNodes);
   selectedId = null;
   setupOpen = false;
+  ritualCollapsed = false;
   inspector.classList.remove("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
@@ -712,6 +739,7 @@ function useExample() {
 
 function openNewMap() {
   setupOpen = true;
+  ritualCollapsed = true;
   selectedId = null;
   inspector.classList.remove("is-open");
   inspector.classList.remove("is-editing");
@@ -725,6 +753,7 @@ function openNewMap() {
 function closeSetup() {
   if (!nodes.length) return;
   setupOpen = false;
+  ritualCollapsed = false;
   setupGoalInput.value = "";
   setupPrereqInput.value = "";
   render();
@@ -829,7 +858,14 @@ document.querySelector("#closeInspectorButton").addEventListener("click", () => 
 });
 document.querySelector("#addChildButton").addEventListener("click", addSupportingAchievement);
 document.querySelector("#nextNodeButton").addEventListener("click", selectNextUnclearNode);
-focusOpenButton.addEventListener("click", selectNextUnclearNode);
+focusOpenButton.addEventListener("click", () => {
+  ritualCollapsed = true;
+  selectNextUnclearNode();
+});
+exploreMapButton.addEventListener("click", () => {
+  ritualCollapsed = true;
+  clearSelection();
+});
 document.querySelector("#zoomInButton").addEventListener("click", () => zoomBy(1.18));
 document.querySelector("#zoomOutButton").addEventListener("click", () => zoomBy(0.85));
 document.querySelector("#fitButton").addEventListener("click", resetView);

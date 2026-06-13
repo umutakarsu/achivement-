@@ -60,6 +60,20 @@ button {
   pointer-events: none;
 }
 
+.graph-shell.is-ritual-open .right-rail,
+.graph-shell.is-ritual-open .node-search,
+.graph-shell.is-ritual-open .graph-status,
+.graph-shell.is-ritual-open .graph-hint {
+  opacity: 0.22;
+  transition: opacity 180ms ease;
+}
+
+.graph-shell.is-ritual-open .right-rail:hover,
+.graph-shell.is-ritual-open .node-search:focus-within,
+.graph-shell.is-ritual-open .graph-status:hover {
+  opacity: 1;
+}
+
 .top-chrome {
   position: absolute;
   inset: 0 0 auto;
@@ -415,32 +429,56 @@ button {
 .focus-tray {
   position: absolute;
   left: 50%;
-  bottom: 1rem;
-  z-index: 6;
+  top: 50%;
+  z-index: 7;
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.85rem;
-  align-items: center;
-  width: min(34rem, calc(100vw - 2rem));
-  padding: 0.72rem 0.78rem 0.72rem;
-  border: 1px solid rgba(82, 82, 82, 0.62);
+  gap: 1rem;
+  width: min(38rem, calc(100vw - 2rem));
+  padding: 1rem;
+  border: 1px solid rgba(95, 95, 95, 0.62);
   border-radius: 8px;
-  background: rgba(24, 24, 24, 0.82);
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.34);
-  backdrop-filter: blur(16px);
-  transform: translateX(-50%);
+  background:
+    linear-gradient(180deg, rgba(42, 42, 42, 0.92), rgba(24, 24, 24, 0.9)),
+    rgba(24, 24, 24, 0.9);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(18px);
+  transform: translate(-50%, -50%);
+  transition:
+    inset 220ms ease,
+    width 220ms ease,
+    transform 220ms ease,
+    background 220ms ease;
 }
 
 .focus-tray.is-hidden {
   display: none;
 }
 
+.focus-tray.is-collapsed {
+  top: auto;
+  bottom: 1rem;
+  grid-template-columns: 1fr auto;
+  gap: 0.85rem;
+  align-items: center;
+  width: min(34rem, calc(100vw - 2rem));
+  padding: 0.72rem 0.78rem;
+  background: rgba(24, 24, 24, 0.82);
+  transform: translateX(-50%);
+}
+
 .focus-progress {
-  grid-column: 1 / -1;
   height: 0.14rem;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
+}
+
+.focus-tray.is-collapsed .focus-progress,
+.focus-tray.is-collapsed .ritual-woop,
+.focus-tray.is-collapsed #focusNodeWhy {
+  display: none;
 }
 
 .focus-progress span,
@@ -457,32 +495,112 @@ button {
   min-width: 0;
 }
 
-.focus-copy .eyebrow {
-  margin-bottom: 0.18rem;
+.focus-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.focus-kicker .eyebrow {
+  margin: 0;
+}
+
+#focusProgressText {
+  color: #a4a4a4;
+  font-size: 0.72rem;
+  font-weight: 850;
 }
 
 .focus-copy strong,
 .focus-copy p {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .focus-copy strong {
   display: block;
   color: #f2f2f2;
+  font-size: 2.25rem;
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+.focus-copy p {
+  margin: 0.55rem 0 0;
+  color: #a8a8a8;
+  font-size: 0.95rem;
+  line-height: 1.42;
+}
+
+#focusNodeAction {
+  color: #eeeeee;
+  font-weight: 820;
+}
+
+.focus-tray.is-collapsed .focus-copy strong,
+.focus-tray.is-collapsed .focus-copy p {
+  white-space: nowrap;
+}
+
+.focus-tray.is-collapsed .focus-copy strong {
   font-size: 0.94rem;
   line-height: 1.2;
 }
 
-.focus-copy p {
-  margin: 0.2rem 0 0;
+.focus-tray.is-collapsed .focus-copy p {
+  margin-top: 0.2rem;
   color: #a8a8a8;
   font-size: 0.78rem;
   line-height: 1.25;
 }
 
-.focus-tray button {
+.ritual-woop {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.45rem;
+}
+
+.ritual-woop span {
+  min-width: 0;
+  padding: 0.62rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.17);
+}
+
+.ritual-woop strong,
+.ritual-woop em {
+  display: block;
+}
+
+.ritual-woop strong {
+  color: #8f8f8f;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ritual-woop em {
+  margin-top: 0.28rem;
+  overflow: hidden;
+  color: #d7d7d7;
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 780;
+  line-height: 1.22;
+  text-overflow: ellipsis;
+}
+
+.focus-actions {
+  display: flex;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+
+.focus-tray button:not(.quiet-button) {
   border: 1px solid rgba(210, 210, 210, 0.26);
   border-radius: 6px;
   padding: 0.56rem 0.76rem;
@@ -492,9 +610,15 @@ button {
   font-weight: 900;
 }
 
-.focus-tray button:hover,
-.focus-tray button:focus-visible {
+.focus-tray button:not(.quiet-button):hover,
+.focus-tray button:not(.quiet-button):focus-visible {
   background: #ffffff;
+}
+
+.focus-actions .quiet-button {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.56rem 0.76rem;
+  background: transparent;
 }
 
 .setup-panel {
@@ -962,16 +1086,38 @@ input[type="range"] {
   }
 
   .focus-tray {
+    top: 24rem;
+    bottom: auto;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    width: calc(100vw - 1.5rem);
+    padding: 0.85rem;
+    transform: translateX(-50%);
+  }
+
+  .focus-tray.is-collapsed {
     top: 36.5rem;
     bottom: auto;
     grid-template-columns: 1fr;
-    gap: 0.65rem;
     width: calc(100vw - 1.5rem);
   }
 
   .focus-copy strong,
   .focus-copy p {
     white-space: normal;
+  }
+
+  .focus-copy strong {
+    font-size: 1.55rem;
+  }
+
+  .ritual-woop {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .focus-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .graph-node {
