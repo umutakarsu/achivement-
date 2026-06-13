@@ -90,7 +90,7 @@ const exampleNodes = [
 let nodes = loadNodes();
 let selectedId = null;
 let setupOpen = nodes.length === 0;
-let ritualCollapsed = false;
+let ritualCollapsed = true;
 
 const setupPanel = document.querySelector("#setupPanel");
 const closeSetupButton = document.querySelector("#closeSetupButton");
@@ -277,7 +277,7 @@ function isReady(node) {
 
 function getNextUnclearNode() {
   const openNodes = nodes.filter((node) => !node.done);
-  if (!openNodes.length) return nodes[0] || null;
+  if (!openNodes.length) return null;
 
   return [...openNodes].sort((a, b) => {
     const aChecks = getReadinessChecks(a).filter((check) => check.met).length;
@@ -401,26 +401,31 @@ function renderHint() {
 
 function renderFocusTray() {
   focusTray.classList.toggle("is-hidden", !nodes.length || setupOpen);
-  graphShell.classList.toggle("is-ritual-open", Boolean(nodes.length && !setupOpen && !ritualCollapsed));
-  focusTray.classList.toggle("is-collapsed", ritualCollapsed);
+  graphShell.classList.remove("is-ritual-open");
+  focusTray.classList.add("is-collapsed");
   if (!nodes.length) return;
 
   const done = nodes.filter((node) => node.done).length;
   const next = getNextUnclearNode();
   const top = nodes.find((node) => !node.parentId) || nodes[0];
   const progress = Math.round((done / nodes.length) * 100);
+  const isComplete = done === nodes.length;
 
   focusProgressBar.style.width = `${progress}%`;
   focusProgressText.textContent = `${progress}% complete`;
-  focusNodeTitle.textContent = next?.title || "Map complete";
-  focusNodeWhy.textContent = shorten(next?.why, "This is the smallest move that makes the larger path easier.");
-  focusNodeAction.textContent = next?.action?.trim() || "Define the smallest visible action.";
+  focusNodeTitle.textContent = isComplete ? "Path complete" : next?.title || "Choose the next move";
+  focusNodeWhy.textContent = isComplete
+    ? "The visible chain is complete. Add a new branch when the next version of the goal is clear."
+    : shorten(next?.why, "This is the smallest move that makes the larger path easier.");
+  focusNodeAction.textContent = isComplete
+    ? "Review the map or add the next achievement."
+    : next?.action?.trim() || "Define the smallest visible action.";
   ritualWish.textContent = shorten(top?.title, "Make the peak real", 48);
   ritualOutcome.textContent = shorten(next?.evidence, "Know what done looks like", 48);
   ritualObstacle.textContent = shorten(next?.blocker, "The likely blocker", 48);
   ritualPlan.textContent = shorten(buildIfThen(next || top), "If the blocker appears, take the next move.", 68);
-  focusOpenButton.disabled = !next;
-  focusOpenButton.textContent = next?.done ? "Review" : "Start move";
+  focusOpenButton.disabled = isComplete || !next;
+  focusOpenButton.textContent = isComplete ? "Complete" : "Start move";
 }
 
 function showCompletion(node) {
@@ -748,7 +753,7 @@ function createInitialMap() {
 
   selectedId = topId;
   setupOpen = false;
-  ritualCollapsed = false;
+  ritualCollapsed = true;
   inspector.classList.add("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
@@ -760,7 +765,7 @@ function useExample() {
   nodes = clone(exampleNodes);
   selectedId = null;
   setupOpen = false;
-  ritualCollapsed = false;
+  ritualCollapsed = true;
   inspector.classList.remove("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
@@ -784,7 +789,7 @@ function openNewMap() {
 function closeSetup() {
   if (!nodes.length) return;
   setupOpen = false;
-  ritualCollapsed = false;
+  ritualCollapsed = true;
   setupGoalInput.value = "";
   setupPrereqInput.value = "";
   render();
