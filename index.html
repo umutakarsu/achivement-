@@ -38,6 +38,18 @@
 
       <aside class="graph-hint" id="graphHint" aria-live="polite"></aside>
 
+      <section class="focus-tray" id="focusTray" aria-label="Recommended next move">
+        <div class="focus-progress" aria-hidden="true">
+          <span id="focusProgressBar"></span>
+        </div>
+        <div class="focus-copy">
+          <span class="eyebrow">Next move</span>
+          <strong id="focusNodeTitle">Choose a goal</strong>
+          <p id="focusNodeAction">Build the first visible step toward the peak.</p>
+        </div>
+        <button id="focusOpenButton" type="button">Open</button>
+      </section>
+
       <nav class="right-rail" aria-label="Graph controls">
         <button id="zoomInButton" type="button" aria-label="Zoom in" data-tip="Zoom in">+</button>
         <button id="zoomOutButton" type="button" aria-label="Zoom out" data-tip="Zoom out">-</button>
@@ -119,6 +131,9 @@
           <div class="preview-title-row">
             <h2 id="previewTitle"></h2>
             <span id="previewMeta"></span>
+            <div class="preview-readiness" aria-label="Readiness score">
+              <span id="previewReadinessBar"></span>
+            </div>
           </div>
           <p id="previewWhy" class="preview-why"></p>
 

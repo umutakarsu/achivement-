@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  --bg: #1e1e1e;
+  --bg: #191919;
   --panel: rgba(36, 36, 36, 0.94);
   --panel-strong: #2b2b2b;
   --ink: #e6e6e6;
@@ -14,6 +14,7 @@
   --warning: #d5a86b;
   --danger: #d47a7a;
   --focus: #8fb8ff;
+  --success: #d6f2c4;
 }
 
 * {
@@ -45,7 +46,10 @@ button {
 .graph-shell {
   position: relative;
   min-height: 100vh;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 50% 10%, rgba(255, 255, 255, 0.055), transparent 24rem),
+    radial-gradient(circle at 52% 72%, rgba(143, 184, 255, 0.035), transparent 28rem),
+    var(--bg);
 }
 
 .graph-shell.is-zoomed-out .graph-node:not(.is-selected):not([data-depth="0"]) .node-label {
@@ -125,7 +129,15 @@ button {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: var(--bg);
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 28%);
+  background-position:
+    0 0,
+    0 0;
+  background-size:
+    34px 34px,
+    100% 100%;
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -155,8 +167,8 @@ button {
 }
 
 .graph-link.is-related {
-  stroke: var(--link-hot);
-  stroke-width: 0.22;
+  stroke: rgba(220, 220, 220, 0.82);
+  stroke-width: 0.28;
 }
 
 .graph-node {
@@ -169,6 +181,9 @@ button {
   background: transparent;
   color: var(--ink);
   transform: translate(-50%, -50%);
+  transition:
+    opacity 160ms ease,
+    filter 160ms ease;
 }
 
 .graph-nodes {
@@ -176,7 +191,7 @@ button {
 }
 
 .graph-node.is-dimmed {
-  opacity: 0.38;
+  opacity: 0.24;
 }
 
 .node-dot {
@@ -185,6 +200,13 @@ button {
   height: 0.78rem;
   border-radius: 50%;
   background: var(--node);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 18px rgba(255, 255, 255, 0.02);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
 }
 
 .graph-node[data-depth="0"] .node-dot {
@@ -193,7 +215,7 @@ button {
 }
 
 .graph-node.is-done .node-dot {
-  background: #d8d8d8;
+  background: var(--success);
 }
 
 .graph-node.is-ready .node-dot {
@@ -208,7 +230,10 @@ button {
 .graph-node:hover .node-dot,
 .graph-node:focus-visible .node-dot {
   background: #ffffff;
-  box-shadow: 0 0 0 0.18rem rgba(255, 255, 255, 0.13);
+  box-shadow:
+    0 0 0 0.18rem rgba(255, 255, 255, 0.13),
+    0 0 26px rgba(255, 255, 255, 0.16);
+  transform: scale(1.16);
 }
 
 .node-label {
@@ -227,6 +252,10 @@ button {
 .graph-node[data-depth="0"] .node-label {
   font-size: 1rem;
   font-weight: 850;
+}
+
+.graph-node.is-selected .node-label {
+  color: #ffffff;
 }
 
 .right-rail {
@@ -375,12 +404,97 @@ button {
 .graph-hint {
   position: absolute;
   left: 1rem;
-  bottom: 1rem;
+  bottom: 5.6rem;
   z-index: 4;
   max-width: min(28rem, calc(100vw - 2rem));
   color: #8e8e8e;
   font-size: 0.82rem;
   line-height: 1.45;
+}
+
+.focus-tray {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.85rem;
+  align-items: center;
+  width: min(34rem, calc(100vw - 2rem));
+  padding: 0.72rem 0.78rem 0.72rem;
+  border: 1px solid rgba(82, 82, 82, 0.62);
+  border-radius: 8px;
+  background: rgba(24, 24, 24, 0.82);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(16px);
+  transform: translateX(-50%);
+}
+
+.focus-tray.is-hidden {
+  display: none;
+}
+
+.focus-progress {
+  grid-column: 1 / -1;
+  height: 0.14rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.focus-progress span,
+.preview-readiness span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(214, 242, 196, 0.78), rgba(255, 255, 255, 0.9));
+  transition: width 220ms ease;
+}
+
+.focus-copy {
+  min-width: 0;
+}
+
+.focus-copy .eyebrow {
+  margin-bottom: 0.18rem;
+}
+
+.focus-copy strong,
+.focus-copy p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focus-copy strong {
+  display: block;
+  color: #f2f2f2;
+  font-size: 0.94rem;
+  line-height: 1.2;
+}
+
+.focus-copy p {
+  margin: 0.2rem 0 0;
+  color: #a8a8a8;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.focus-tray button {
+  border: 1px solid rgba(210, 210, 210, 0.26);
+  border-radius: 6px;
+  padding: 0.56rem 0.76rem;
+  background: #eeeeee;
+  color: #171717;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.focus-tray button:hover,
+.focus-tray button:focus-visible {
+  background: #ffffff;
 }
 
 .setup-panel {
@@ -528,6 +642,13 @@ button {
   color: #9e9e9e;
   font-size: 0.74rem;
   font-weight: 800;
+}
+
+.preview-readiness {
+  height: 0.18rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .preview-why {
@@ -838,6 +959,19 @@ input[type="range"] {
     left: 0.7rem;
     width: calc(100vw - 5.6rem);
     transform: none;
+  }
+
+  .focus-tray {
+    top: 36.5rem;
+    bottom: auto;
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+    width: calc(100vw - 1.5rem);
+  }
+
+  .focus-copy strong,
+  .focus-copy p {
+    white-space: normal;
   }
 
   .graph-node {

@@ -104,6 +104,11 @@ const graphHint = document.querySelector("#graphHint");
 const modeLabel = document.querySelector("#modeLabel");
 const zoomLabel = document.querySelector("#zoomLabel");
 const readinessSummary = document.querySelector("#readinessSummary");
+const focusTray = document.querySelector("#focusTray");
+const focusProgressBar = document.querySelector("#focusProgressBar");
+const focusNodeTitle = document.querySelector("#focusNodeTitle");
+const focusNodeAction = document.querySelector("#focusNodeAction");
+const focusOpenButton = document.querySelector("#focusOpenButton");
 const nodeSearch = document.querySelector(".node-search");
 const nodeSearchInput = document.querySelector("#nodeSearchInput");
 const searchResults = document.querySelector("#searchResults");
@@ -111,6 +116,7 @@ const inspector = document.querySelector("#inspector");
 const inspectorPath = document.querySelector("#inspectorPath");
 const previewTitle = document.querySelector("#previewTitle");
 const previewMeta = document.querySelector("#previewMeta");
+const previewReadinessBar = document.querySelector("#previewReadinessBar");
 const previewWhy = document.querySelector("#previewWhy");
 const previewAction = document.querySelector("#previewAction");
 const relationChips = document.querySelector("#relationChips");
@@ -257,7 +263,15 @@ function isReady(node) {
 }
 
 function getNextUnclearNode() {
-  return nodes.find((node) => !node.done && !isReady(node)) || nodes.find((node) => !node.done) || nodes[0] || null;
+  const openNodes = nodes.filter((node) => !node.done);
+  if (!openNodes.length) return nodes[0] || null;
+
+  return [...openNodes].sort((a, b) => {
+    const aChecks = getReadinessChecks(a).filter((check) => check.met).length;
+    const bChecks = getReadinessChecks(b).filter((check) => check.met).length;
+    if (aChecks !== bChecks) return aChecks - bChecks;
+    return Number(a.confidence) - Number(b.confidence);
+  })[0];
 }
 
 function getGraphLayout() {
@@ -349,6 +363,7 @@ function renderHint() {
   if (!nodes.length) {
     graphHint.textContent = "";
     readinessSummary.textContent = "0 clear";
+    renderFocusTray();
     return;
   }
 
@@ -362,6 +377,22 @@ function renderHint() {
   modeLabel.textContent = mode;
   readinessSummary.textContent = `${ready}/${nodes.length} clear`;
   graphHint.textContent = `${mode}. ${done}/${nodes.length} complete. ${ready}/${nodes.length} clear enough to act on. Average confidence ${avgConfidence}%. Next review: ${next?.title || "none"}. Press / to find, scroll to zoom, drag empty space to pan.`;
+  renderFocusTray();
+}
+
+function renderFocusTray() {
+  focusTray.classList.toggle("is-hidden", !nodes.length || setupOpen);
+  if (!nodes.length) return;
+
+  const done = nodes.filter((node) => node.done).length;
+  const next = getNextUnclearNode();
+  const progress = Math.round((done / nodes.length) * 100);
+
+  focusProgressBar.style.width = `${progress}%`;
+  focusNodeTitle.textContent = next?.title || "Map complete";
+  focusNodeAction.textContent = next?.action?.trim() || "Define the smallest visible action.";
+  focusOpenButton.disabled = !next;
+  focusOpenButton.textContent = next?.done ? "Review" : "Open";
 }
 
 function renderSetup() {
@@ -402,6 +433,7 @@ function renderPreview(node) {
 
   previewTitle.textContent = node.title || "Untitled achievement";
   previewMeta.textContent = `${node.done ? "Done" : "Open"} - ${node.confidence}% belief - ${met}/${checks.length} ready`;
+  previewReadinessBar.style.width = `${Math.round((met / checks.length) * 100)}%`;
   previewWhy.textContent = node.why.trim() || "Add why this achievement matters so the node has emotional pull.";
   previewAction.textContent = node.action.trim() || "Define the smallest visible action.";
 
@@ -428,6 +460,7 @@ function renderPreview(node) {
 
   localDepthInput.value = String(view.localDepth);
   localDepthLabel.textContent = `${view.localDepth} ${view.localDepth === 1 ? "step" : "steps"}`;
+  document.querySelector("#previewDoneButton").textContent = node.done ? "Mark open" : "Mark done";
   document.querySelector("#globalViewButton").textContent = view.focusMode ? "Global view" : "Focus local";
   inspectorPath.textContent =
     getDepth(node) === 0
@@ -574,6 +607,7 @@ function selectNextUnclearNode() {
   const next = getNextUnclearNode();
   if (!next) return;
   selectNode(next.id);
+  centerNode(next.id);
 }
 
 function renderSearchResults() {
@@ -795,6 +829,7 @@ document.querySelector("#closeInspectorButton").addEventListener("click", () => 
 });
 document.querySelector("#addChildButton").addEventListener("click", addSupportingAchievement);
 document.querySelector("#nextNodeButton").addEventListener("click", selectNextUnclearNode);
+focusOpenButton.addEventListener("click", selectNextUnclearNode);
 document.querySelector("#zoomInButton").addEventListener("click", () => zoomBy(1.18));
 document.querySelector("#zoomOutButton").addEventListener("click", () => zoomBy(0.85));
 document.querySelector("#fitButton").addEventListener("click", resetView);
