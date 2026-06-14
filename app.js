@@ -1,92 +1,5 @@
 const STORAGE_KEY = "achievement-graph-v2";
 
-const exampleNodes = [
-  {
-    id: "top",
-    parentId: null,
-    title: "Run my first marathon",
-    why: "I want proof that I can keep a promise to myself across months, not days.",
-    blocker: "Work gets busy and I skip training.",
-    confidence: 75,
-    friction: "High",
-    evidence: "I finish a certified marathon and can explain the training system that got me there.",
-    action: "Schedule three 30-minute runs this week.",
-    done: false,
-  },
-  {
-    id: "base-fitness",
-    parentId: "top",
-    title: "Build running base",
-    why: "Repeated easy runs make the bigger goal feel normal instead of heroic.",
-    blocker: "Starting too hard and getting sore.",
-    confidence: 80,
-    friction: "Medium",
-    evidence: "Four weeks with at least three runs per week.",
-    action: "Choose exact weekdays and times for each run.",
-    done: true,
-  },
-  {
-    id: "fuel-recovery",
-    parentId: "top",
-    title: "Learn fuel recovery",
-    why: "The goal becomes safer when my body has a recovery system.",
-    blocker: "Forgetting meals after long sessions.",
-    confidence: 60,
-    friction: "Medium",
-    evidence: "A repeatable pre-run, post-run, and sleep routine.",
-    action: "Write a simple post-run meal list.",
-    done: false,
-  },
-  {
-    id: "shoes",
-    parentId: "base-fitness",
-    title: "Choose fitted shoes",
-    why: "Reducing pain makes the habit easier to repeat.",
-    blocker: "Overthinking gear choices.",
-    confidence: 90,
-    friction: "Low",
-    evidence: "I can run 8 km without foot pain.",
-    action: "Visit a running store this Saturday.",
-    done: true,
-  },
-  {
-    id: "routes",
-    parentId: "base-fitness",
-    title: "Save run routes",
-    why: "A default route removes decision fatigue.",
-    blocker: "Weather and dark evenings.",
-    confidence: 70,
-    friction: "Low",
-    evidence: "Short, medium, and long routes are saved.",
-    action: "Save one 5 km route near home.",
-    done: true,
-  },
-  {
-    id: "sleep",
-    parentId: "fuel-recovery",
-    title: "Protect sleep",
-    why: "Recovery is the hidden training session.",
-    blocker: "Late screen time on Fridays.",
-    confidence: 45,
-    friction: "High",
-    evidence: "At least 7 hours of sleep before three long runs.",
-    action: "Set a Friday 10:15 PM wind-down alarm.",
-    done: false,
-  },
-  {
-    id: "race-fuel",
-    parentId: "fuel-recovery",
-    title: "Practice fueling",
-    why: "Confidence grows when race day feels familiar.",
-    blocker: "Trying new food too late.",
-    confidence: 55,
-    friction: "Medium",
-    evidence: "Two long runs finished with the same fueling plan.",
-    action: "Buy two fuel options to test.",
-    done: false,
-  },
-];
-
 let nodes = loadNodes();
 let selectedId = null;
 let setupOpen = nodes.length === 0;
@@ -176,20 +89,29 @@ const view = {
 const activePointers = new Map();
 let completionTimer = null;
 
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
-}
-
 function loadNodes() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return [];
 
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    if (isLegacyExampleMap(parsed)) {
+      localStorage.removeItem(STORAGE_KEY);
+      return [];
+    }
+    return parsed;
   } catch {
     return [];
   }
+}
+
+function isLegacyExampleMap(value) {
+  const requiredDemoIds = ["top", "base-fitness", "fuel-recovery", "shoes", "routes", "sleep", "race-fuel"];
+  const ids = new Set(value.map((node) => node?.id));
+  const top = value.find((node) => node?.id === "top");
+
+  return top?.title === "Run my first marathon" && requiredDemoIds.every((id) => ids.has(id));
 }
 
 function save() {
@@ -849,20 +771,6 @@ function createInitialMap() {
   render();
 }
 
-function useExample() {
-  nodes = clone(exampleNodes);
-  selectedId = null;
-  setupOpen = false;
-  ritualCollapsed = true;
-  placementMode = false;
-  connectFromId = null;
-  inspector.classList.remove("is-open");
-  inspector.classList.remove("is-editing");
-  view.focusMode = false;
-  save();
-  render();
-}
-
 function openNewMap() {
   setupOpen = true;
   ritualCollapsed = true;
@@ -1043,10 +951,8 @@ Object.entries(inputs).forEach(([key, input]) => {
 });
 
 document.querySelector("#createMapButton").addEventListener("click", createInitialMap);
-document.querySelector("#useExampleButton").addEventListener("click", useExample);
 document.querySelector("#newMapButton").addEventListener("click", openNewMap);
 closeSetupButton.addEventListener("click", closeSetup);
-document.querySelector("#resetButton").addEventListener("click", useExample);
 document.querySelector("#inspectorToggle").addEventListener("click", () => {
   if (!nodes.length) return;
   inspector.classList.add("is-open");
