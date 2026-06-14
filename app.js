@@ -985,7 +985,6 @@ document.querySelector("#editDetailsButton").addEventListener("click", () => {
   inputs.title.focus();
 });
 document.querySelector("#linkNodeButton").addEventListener("click", startLinkMode);
-document.querySelector("#previewAddButton").addEventListener("click", addSupportingAchievement);
 document.querySelector("#globalViewButton").addEventListener("click", () => {
   view.focusMode = !view.focusMode;
   render();
