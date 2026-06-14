@@ -46,6 +46,8 @@ const previewTitle = document.querySelector("#previewTitle");
 const previewMeta = document.querySelector("#previewMeta");
 const previewStatusPill = document.querySelector("#previewStatusPill");
 const previewClearPill = document.querySelector("#previewClearPill");
+const previewGuidance = document.querySelector("#previewGuidance");
+const previewGuidanceText = document.querySelector("#previewGuidanceText");
 const confidenceRing = document.querySelector("#confidenceRing");
 const confidenceRingValue = document.querySelector("#confidenceRingValue");
 const previewReadinessBar = document.querySelector("#previewReadinessBar");
@@ -253,6 +255,47 @@ function getReadinessChecks(node) {
   ];
 }
 
+function getGuidance(node) {
+  if (node.done) {
+    return {
+      tone: "done",
+      text: "This promise is kept. Move to the next open node or add a harder version.",
+    };
+  }
+
+  const checks = getReadinessChecks(node);
+  const missing = checks.find((check) => !check.met);
+  const childCount = childrenOf(node.id).length;
+
+  if (!missing) {
+    return {
+      tone: "ready",
+      text: "This is clear enough. Do the next action, then mark it done.",
+    };
+  }
+
+  const guidanceByLabel = {
+    "Specific achievement": "Make the title concrete enough that you can picture the finish line.",
+    "Self-endorsed why": "Add why this matters to you, not why it should matter to someone else.",
+    "Proof of completion": "Define the proof. What visible evidence means this is done?",
+    "Named blocker": "Name the most likely blocker before it surprises you.",
+    "Small next action": "Shrink this to one action you can start without planning.",
+    "Believable enough": "Lower the size of this move or add a supporting node until it feels believable.",
+  };
+
+  if (childCount === 0 && Number(node.confidence) < 65) {
+    return {
+      tone: "small",
+      text: "Add one sub-achievement that removes the hardest blocker.",
+    };
+  }
+
+  return {
+    tone: "open",
+    text: guidanceByLabel[missing.label] || "Clarify the next move before acting.",
+  };
+}
+
 function isReady(node) {
   return getReadinessChecks(node).every((check) => check.met);
 }
@@ -271,6 +314,7 @@ function getNextUnclearNode() {
 
 function getGraphLayout() {
   const groups = new Map();
+  const isCompact = window.innerWidth <= 760;
   nodes.forEach((node) => {
     const depth = getDepth(node);
     if (!groups.has(depth)) groups.set(depth, []);
@@ -281,7 +325,13 @@ function getGraphLayout() {
   const maxDepth = Math.max(1, ...groups.keys());
 
   [...groups.entries()].forEach(([depth, group]) => {
-    const y = depth === 0 ? 16 : 28 + depth * (60 / maxDepth);
+    const y = isCompact
+      ? depth === 0
+        ? 25
+        : 43 + (depth - 1) * (34 / Math.max(1, maxDepth - 1))
+      : depth === 0
+        ? 16
+        : 28 + depth * (60 / maxDepth);
 
     group.forEach((node, index) => {
       const parent = getParent(node);
@@ -298,7 +348,7 @@ function getGraphLayout() {
       const autoPosition = {
         depth,
         x: depth === 0 ? 50 : Math.max(10, Math.min(90, x)),
-        y: Math.max(12, Math.min(88, y)),
+        y: Math.max(isCompact ? 23 : 12, Math.min(isCompact ? 78 : 88, y)),
       };
 
       positions.set(node.id, {
@@ -427,12 +477,14 @@ function showCompletion(node) {
   const done = nodes.filter((candidate) => candidate.done).length;
   const progress = Math.round((done / nodes.length) * 100);
   const next = getNextUnclearNode();
+  const top = nodes.find((candidate) => !candidate.parentId) || nodes[0];
+  const finishedBranch = childrenOf(node.id).length > 0 ? "branch" : "move";
 
   clearTimeout(completionTimer);
   completionTitle.textContent = `${node.title} is done.`;
   completionCopy.textContent = next
-    ? `${progress}% of the path is complete. Next: ${next.title}.`
-    : "Every visible move is complete. Take a second to notice the promise you kept.";
+    ? `${progress}% toward ${top.title}. Next smallest move: ${next.title}.`
+    : `Every visible ${finishedBranch} is complete. Take a second to notice the promise you kept.`;
   completionNextButton.hidden = !next || next.id === node.id;
   completionToast.classList.add("is-visible");
   graphShell.classList.add("is-celebrating");
@@ -491,6 +543,9 @@ function renderPreview(node) {
   previewStatusPill.textContent = node.done ? "Done" : "Open";
   previewStatusPill.classList.toggle("is-done", Boolean(node.done));
   previewClearPill.textContent = `${met} of ${checks.length} clear`;
+  const guidance = getGuidance(node);
+  previewGuidance.dataset.tone = guidance.tone;
+  previewGuidanceText.textContent = guidance.text;
   confidenceRing.style.setProperty("--confidence", `${Number(node.confidence || 0)}%`);
   confidenceRingValue.textContent = String(node.confidence);
   previewReadinessBar.style.width = `${Math.round((met / checks.length) * 100)}%`;
