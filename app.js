@@ -1,4 +1,6 @@
 const STORAGE_KEY = "achievement-graph-v2";
+const COACH_STORAGE_KEY = "achievement-graph-coach-seen-v1";
+const MILESTONES = [25, 50, 75, 100];
 
 let nodes = loadNodes();
 let selectedId = null;
@@ -6,6 +8,7 @@ let setupOpen = nodes.length === 0;
 let ritualCollapsed = true;
 let placementMode = false;
 let connectFromId = null;
+let coachOpen = nodes.length > 0 && localStorage.getItem(COACH_STORAGE_KEY) !== "true";
 
 const setupPanel = document.querySelector("#setupPanel");
 const closeSetupButton = document.querySelector("#closeSetupButton");
@@ -33,6 +36,11 @@ const focusNodeWhy = document.querySelector("#focusNodeWhy");
 const focusNodeAction = document.querySelector("#focusNodeAction");
 const focusOpenButton = document.querySelector("#focusOpenButton");
 const exploreMapButton = document.querySelector("#exploreMapButton");
+const rewardRail = document.querySelector("#rewardRail");
+const rewardCopy = document.querySelector("#rewardCopy");
+const mapCoach = document.querySelector("#mapCoach");
+const coachStartButton = document.querySelector("#coachStartButton");
+const coachDismissButton = document.querySelector("#coachDismissButton");
 const ritualWish = document.querySelector("#ritualWish");
 const ritualOutcome = document.querySelector("#ritualOutcome");
 const ritualObstacle = document.querySelector("#ritualObstacle");
@@ -120,6 +128,38 @@ function isLegacyExampleMap(value) {
 
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(nodes));
+}
+
+function getProgressStats() {
+  const total = nodes.length;
+  const done = nodes.filter((node) => node.done).length;
+  const progress = total ? Math.round((done / total) * 100) : 0;
+  const nextMilestone = MILESTONES.find((milestone) => progress < milestone) || 100;
+  const lastMilestone = [...MILESTONES].reverse().find((milestone) => progress >= milestone) || 0;
+
+  return {
+    done,
+    total,
+    progress,
+    lastMilestone,
+    nextMilestone,
+    remainingToNext: Math.max(0, nextMilestone - progress),
+  };
+}
+
+function getCrossedMilestone(previousProgress, nextProgress) {
+  return [...MILESTONES].reverse().find((milestone) => previousProgress < milestone && nextProgress >= milestone) || null;
+}
+
+function showCoach() {
+  coachOpen = nodes.length > 0 && localStorage.getItem(COACH_STORAGE_KEY) !== "true";
+  renderCoach();
+}
+
+function dismissCoach() {
+  coachOpen = false;
+  localStorage.setItem(COACH_STORAGE_KEY, "true");
+  renderCoach();
 }
 
 function buzz(type = "soft", event = null) {
@@ -450,14 +490,13 @@ function renderFocusTray() {
   focusTray.classList.add("is-collapsed");
   if (!nodes.length) return;
 
-  const done = nodes.filter((node) => node.done).length;
+  const stats = getProgressStats();
   const next = getNextUnclearNode();
   const top = nodes.find((node) => !node.parentId) || nodes[0];
-  const progress = Math.round((done / nodes.length) * 100);
-  const isComplete = done === nodes.length;
+  const isComplete = stats.done === stats.total;
 
-  focusProgressBar.style.width = `${progress}%`;
-  focusProgressText.textContent = `${progress}% complete`;
+  focusProgressBar.style.width = `${stats.progress}%`;
+  focusProgressText.textContent = `${stats.progress}% complete`;
   focusNodeTitle.textContent = isComplete ? "Path complete" : next?.title || "Choose the next move";
   focusNodeWhy.textContent = isComplete
     ? "The visible chain is complete. Add a new branch when the next version of the goal is clear."
@@ -465,6 +504,14 @@ function renderFocusTray() {
   focusNodeAction.textContent = isComplete
     ? "Review the map or add the next achievement."
     : next?.action?.trim() || "Define the smallest visible action.";
+  rewardCopy.textContent = isComplete
+    ? `100% unlocked for ${shorten(top?.title, "the peak", 34)}.`
+    : `${stats.remainingToNext}% until the ${stats.nextMilestone}% reward. Complete one visible move.`;
+  rewardRail.querySelectorAll("[data-milestone]").forEach((item) => {
+    const milestone = Number(item.dataset.milestone);
+    item.classList.toggle("is-earned", stats.progress >= milestone);
+    item.classList.toggle("is-next", !isComplete && stats.nextMilestone === milestone);
+  });
   ritualWish.textContent = shorten(top?.title, "Make the peak real", 48);
   ritualOutcome.textContent = shorten(next?.evidence, "Know what done looks like", 48);
   ritualObstacle.textContent = shorten(next?.blocker, "The likely blocker", 48);
@@ -473,25 +520,36 @@ function renderFocusTray() {
   focusOpenButton.textContent = isComplete ? "Complete" : "Start move";
 }
 
-function showCompletion(node) {
-  const done = nodes.filter((candidate) => candidate.done).length;
-  const progress = Math.round((done / nodes.length) * 100);
+function renderCoach() {
+  const shouldShow = coachOpen && nodes.length > 0 && !setupOpen && !selectedId && !placementMode && !connectFromId;
+  mapCoach.classList.toggle("is-visible", shouldShow);
+}
+
+function showCompletion(node, previousProgress = 0) {
+  const stats = getProgressStats();
   const next = getNextUnclearNode();
   const top = nodes.find((candidate) => !candidate.parentId) || nodes[0];
   const finishedBranch = childrenOf(node.id).length > 0 ? "branch" : "move";
+  const milestone = getCrossedMilestone(previousProgress, stats.progress);
 
   clearTimeout(completionTimer);
-  completionTitle.textContent = `${node.title} is done.`;
-  completionCopy.textContent = next
-    ? `${progress}% toward ${top.title}. Next smallest move: ${next.title}.`
-    : `Every visible ${finishedBranch} is complete. Take a second to notice the promise you kept.`;
+  completionTitle.textContent = milestone ? `${milestone}% reward unlocked.` : `${node.title} is done.`;
+  completionCopy.textContent = milestone
+    ? next
+      ? `${node.title} moved ${top.title} forward. Next smallest move: ${next.title}.`
+      : `Every visible ${finishedBranch} is complete. Take a second to notice the promise you kept.`
+    : next
+      ? `${stats.progress}% toward ${top.title}. Next smallest move: ${next.title}.`
+      : `Every visible ${finishedBranch} is complete. Take a second to notice the promise you kept.`;
   completionNextButton.hidden = !next || next.id === node.id;
   completionToast.classList.add("is-visible");
   graphShell.classList.add("is-celebrating");
+  graphShell.classList.toggle("is-milestone", Boolean(milestone));
 
   completionTimer = setTimeout(() => {
     completionToast.classList.remove("is-visible");
     graphShell.classList.remove("is-celebrating");
+    graphShell.classList.remove("is-milestone");
   }, 4200);
 }
 
@@ -695,6 +753,7 @@ function applyViewTransform() {
   graphShell.classList.toggle("has-selection", Boolean(selectedId));
   graphShell.classList.toggle("is-placing", placementMode);
   graphShell.classList.toggle("is-linking", Boolean(connectFromId));
+  graphShell.classList.toggle("is-coaching", coachOpen);
 }
 
 function zoomAt(clientX, clientY, nextScale) {
@@ -863,6 +922,7 @@ function createInitialMap() {
   view.focusMode = false;
   save();
   buzz("create");
+  showCoach();
   render();
 }
 
@@ -872,6 +932,7 @@ function openNewMap() {
   selectedId = null;
   placementMode = false;
   connectFromId = null;
+  coachOpen = false;
   inspector.classList.remove("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
@@ -887,6 +948,7 @@ function closeSetup() {
   ritualCollapsed = true;
   placementMode = false;
   connectFromId = null;
+  coachOpen = localStorage.getItem(COACH_STORAGE_KEY) !== "true";
   setupGoalInput.value = "";
   setupPrereqInput.value = "";
   render();
@@ -1124,11 +1186,12 @@ document.querySelector("#previewDoneButton").addEventListener("click", () => {
   const node = getSelected();
   if (!node) return;
   const wasDone = node.done;
+  const previousProgress = getProgressStats().progress;
   node.done = !node.done;
   save();
   buzz(node.done ? "complete" : "soft");
   render();
-  if (!wasDone && node.done) showCompletion(node);
+  if (!wasDone && node.done) showCompletion(node, previousProgress);
 });
 completionNextButton.addEventListener("click", () => {
   buzz("soft");
@@ -1139,6 +1202,14 @@ completionNextButton.addEventListener("click", () => {
 });
 document.querySelector("#shrinkButton").addEventListener("click", makeSelectedSmaller);
 document.querySelector("#deleteButton").addEventListener("click", deleteSelected);
+coachStartButton.addEventListener("click", (event) => {
+  dismissCoach();
+  selectNextUnclearNode(event);
+});
+coachDismissButton.addEventListener("click", () => {
+  buzz("soft");
+  dismissCoach();
+});
 nodeSearchInput.addEventListener("input", renderSearchResults);
 nodeSearchInput.addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
@@ -1250,6 +1321,7 @@ function render() {
   renderSetup();
   renderGraph();
   renderInspector();
+  renderCoach();
 }
 
 render();

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Achievement Graph</title>
-    <link rel="stylesheet" href="styles.css?v=product-polish-1" />
+    <link rel="stylesheet" href="styles.css?v=reward-onboarding-1" />
   </head>
   <body>
     <main class="graph-shell">
@@ -50,6 +50,12 @@
         <div class="focus-progress" aria-hidden="true">
           <span id="focusProgressBar"></span>
         </div>
+        <div class="reward-rail" id="rewardRail" aria-label="Progress milestones">
+          <span data-milestone="25">25</span>
+          <span data-milestone="50">50</span>
+          <span data-milestone="75">75</span>
+          <span data-milestone="100">100</span>
+        </div>
         <div class="focus-kicker">
           <span class="eyebrow">Today</span>
           <span id="focusProgressText">0% complete</span>
@@ -58,6 +64,7 @@
           <strong id="focusNodeTitle">Choose a goal</strong>
           <p id="focusNodeWhy">Choose the move that makes the whole path lighter.</p>
           <p id="focusNodeAction">Build the first visible step toward the peak.</p>
+          <p id="rewardCopy" class="reward-copy">Next reward at 25%.</p>
         </div>
         <div class="ritual-woop" aria-label="Daily plan">
           <span><strong>Wish</strong><em id="ritualWish">Make the peak real</em></span>
@@ -68,6 +75,19 @@
         <div class="focus-actions">
           <button id="focusOpenButton" type="button">Start move</button>
           <button id="exploreMapButton" class="quiet-button" type="button">Explore map</button>
+        </div>
+      </section>
+
+      <section class="map-coach" id="mapCoach" aria-label="How to read the achievement map">
+        <span class="eyebrow">Read the map in 10 seconds</span>
+        <div class="coach-steps">
+          <span><strong>Peak</strong>The top node is the achievement you want.</span>
+          <span><strong>Support</strong>Nodes below are prerequisites that make it possible.</span>
+          <span><strong>Move</strong>Tap a node, define one next action, then mark it done.</span>
+        </div>
+        <div class="coach-actions">
+          <button id="coachStartButton" type="button">Start next move</button>
+          <button id="coachDismissButton" class="quiet-button" type="button">Got it</button>
         </div>
       </section>
 
@@ -284,6 +304,6 @@
       </button>
     </template>
 
-    <script src="app.js?v=product-polish-1"></script>
+    <script src="app.js?v=reward-onboarding-1"></script>
   </body>
 </html>
