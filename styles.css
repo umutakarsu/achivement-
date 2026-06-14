@@ -160,7 +160,7 @@ body {
 
 .graph-link.is-context,
 .graph-link.is-complete {
-  stroke: rgba(94, 155, 255, 0.58);
+  stroke: rgba(218, 232, 255, 0.48);
 }
 
 .node-dot {
@@ -933,7 +933,7 @@ button:active,
 }
 
 .graph-link.is-direct {
-  stroke: rgba(94, 155, 255, 0.82);
+  stroke: rgba(226, 238, 255, 0.7);
   stroke-width: 0.24;
 }
 
@@ -1451,7 +1451,7 @@ button:active,
   --faint: #86868b;
   --line: rgba(0, 0, 0, 0.1);
   --link: rgba(255, 255, 255, 0.18);
-  --link-hot: rgba(94, 155, 255, 0.52);
+  --link-hot: rgba(218, 232, 255, 0.48);
   --node: #f2f2f7;
   --node-dim: #8e8e93;
   --warning: #5e9bff;
@@ -1595,7 +1595,7 @@ body {
 
 .graph-link.is-context,
 .graph-link.is-complete {
-  stroke: rgba(94, 155, 255, 0.58);
+  stroke: rgba(218, 232, 255, 0.48);
 }
 
 .node-dot {
@@ -3499,7 +3499,7 @@ body {
 
 .graph-link.is-context,
 .graph-link.is-complete {
-  stroke: rgba(94, 155, 255, 0.58);
+  stroke: rgba(218, 232, 255, 0.48);
 }
 
 .node-dot {
