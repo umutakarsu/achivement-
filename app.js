@@ -50,6 +50,12 @@ const nodeSearchInput = document.querySelector("#nodeSearchInput");
 const searchResults = document.querySelector("#searchResults");
 const inspector = document.querySelector("#inspector");
 const inspectorPath = document.querySelector("#inspectorPath");
+const selectionHud = document.querySelector("#selectionHud");
+const selectionHudMeta = document.querySelector("#selectionHudMeta");
+const selectionHudTitle = document.querySelector("#selectionHudTitle");
+const selectionHudAction = document.querySelector("#selectionHudAction");
+const selectionHudDone = document.querySelector("#selectionHudDone");
+const selectionHudEdit = document.querySelector("#selectionHudEdit");
 const previewTitle = document.querySelector("#previewTitle");
 const previewMeta = document.querySelector("#previewMeta");
 const previewStatusPill = document.querySelector("#previewStatusPill");
@@ -261,6 +267,17 @@ function getRelatedIds() {
   return related;
 }
 
+function getDirectNeighborIds(nodeId = selectedId) {
+  const direct = new Set();
+  const node = nodes.find((candidate) => candidate.id === nodeId);
+  if (!node) return direct;
+
+  direct.add(node.id);
+  if (node.parentId) direct.add(node.parentId);
+  childrenOf(node.id).forEach((child) => direct.add(child.id));
+  return direct;
+}
+
 function getVisibleIds() {
   if (!view.focusMode) return new Set(nodes.map((node) => node.id));
   return getRelatedIds();
@@ -408,6 +425,7 @@ function renderGraph() {
 
   const positions = getGraphLayout();
   const relatedIds = getRelatedIds();
+  const directNeighborIds = getDirectNeighborIds();
   const visibleIds = getVisibleIds();
   const hasSelection = Boolean(selectedId);
 
@@ -430,6 +448,10 @@ function renderGraph() {
       "is-context",
       relatedIds.has(node.id) && relatedIds.has(node.parentId) && node.parentId === selectedId && !node.done,
     );
+    line.classList.toggle(
+      "is-direct",
+      directNeighborIds.has(node.id) && directNeighborIds.has(node.parentId) && hasSelection,
+    );
     line.classList.toggle("is-complete", node.done);
     linkLayer.append(line);
   });
@@ -446,6 +468,7 @@ function renderGraph() {
     button.classList.toggle("is-ready", isReady(node));
     button.classList.toggle("is-low-confidence", Number(node.confidence) < 65);
     button.classList.toggle("is-dimmed", hasSelection && !relatedIds.has(node.id));
+    button.classList.toggle("is-neighbor", hasSelection && node.id !== selectedId && directNeighborIds.has(node.id));
     button.classList.toggle("is-link-target", Boolean(connectFromId) && canConnectToParent(connectFromId, node.id));
     button.hidden = !visibleIds.has(node.id);
     button.querySelector(".node-label").textContent = node.title || "Untitled achievement";
@@ -482,6 +505,31 @@ function renderHint() {
     graphHint.textContent = `${mode}. ${done}/${nodes.length} complete. ${ready}/${nodes.length} clear enough to act on. Average confidence ${avgConfidence}%. Next review: ${next?.title || "none"}. Press / to find, scroll to zoom, drag empty space to pan.`;
   }
   renderFocusTray();
+}
+
+function renderSelectionHud() {
+  const node = getSelected();
+  selectionHud.classList.toggle("is-visible", Boolean(node) && !setupOpen && !placementMode && !connectFromId);
+  if (!node) return;
+
+  const positions = getGraphLayout();
+  const position = positions.get(node.id);
+  const checks = getReadinessChecks(node);
+  const met = checks.filter((check) => check.met).length;
+  const depthLabel = getDepth(node) === 0 ? "Peak" : "Support";
+  const x = position ? (position.x / 100) * graphCanvas.clientWidth * view.scale + view.x : graphCanvas.clientWidth / 2;
+  const y = position ? (position.y / 100) * graphCanvas.clientHeight * view.scale + view.y : graphCanvas.clientHeight / 2;
+  const hudX = Math.max(132, Math.min(graphCanvas.clientWidth - 132, x));
+  const hudY = Math.max(118, Math.min(graphCanvas.clientHeight - 122, y - 76));
+
+  selectionHud.style.left = `${hudX}px`;
+  selectionHud.style.top = `${hudY}px`;
+  selectionHudMeta.textContent = `${depthLabel} - ${met}/${checks.length} clear`;
+  selectionHudTitle.textContent = node.title || "Untitled achievement";
+  selectionHudAction.textContent = node.done
+    ? "Done. Choose the next open node."
+    : node.action.trim() || getGuidance(node).text;
+  selectionHudDone.textContent = node.done ? "Reopen" : "Done";
 }
 
 function renderFocusTray() {
@@ -713,6 +761,7 @@ function selectNode(id, options = {}) {
   placementMode = false;
   connectFromId = null;
   if (options.focus) view.focusMode = true;
+  if (options.center !== false) centerNodeForSelection(id);
   inspector.classList.add("is-open");
   inspector.classList.toggle("is-editing", Boolean(options.editing));
   if (!options.silent) buzz("select", options.event);
@@ -735,7 +784,6 @@ function selectNodeFromSearch(id) {
   nodeSearch.classList.remove("is-open");
   searchResults.innerHTML = "";
   selectNode(id);
-  centerNode(id);
 }
 
 function clampScale(scale) {
@@ -754,6 +802,7 @@ function applyViewTransform() {
   graphShell.classList.toggle("is-placing", placementMode);
   graphShell.classList.toggle("is-linking", Boolean(connectFromId));
   graphShell.classList.toggle("is-coaching", coachOpen);
+  renderSelectionHud();
 }
 
 function zoomAt(clientX, clientY, nextScale) {
@@ -803,6 +852,19 @@ function centerNode(id) {
   applyViewTransform();
 }
 
+function centerNodeForSelection(id) {
+  const position = getGraphLayout().get(id);
+  if (!position) return;
+
+  const rect = graphCanvas.getBoundingClientRect();
+  const isCompact = window.innerWidth <= 760;
+  const targetX = isCompact ? rect.width / 2 : rect.width * 0.66;
+  const targetY = isCompact ? rect.height * 0.3 : rect.height * 0.45;
+
+  view.x = targetX - (position.x / 100) * rect.width * view.scale;
+  view.y = targetY - (position.y / 100) * rect.height * view.scale;
+}
+
 function clearSelection() {
   selectedId = null;
   placementMode = false;
@@ -829,7 +891,6 @@ function selectNextUnclearNode(event = null) {
   const next = getNextUnclearNode();
   if (!next) return;
   selectNode(next.id, { event });
-  centerNode(next.id);
 }
 
 function renderSearchResults() {
@@ -1050,6 +1111,19 @@ function updateParent(parentId) {
   renderInspector();
 }
 
+function toggleSelectedDone() {
+  const node = getSelected();
+  if (!node) return;
+
+  const wasDone = node.done;
+  const previousProgress = getProgressStats().progress;
+  node.done = !node.done;
+  save();
+  buzz(node.done ? "complete" : "soft");
+  render();
+  if (!wasDone && node.done) showCompletion(node, previousProgress);
+}
+
 function makeSelectedSmaller() {
   const node = getSelected();
   if (!node) return;
@@ -1183,15 +1257,7 @@ document.querySelector("#globalViewButton").addEventListener("click", () => {
   render();
 });
 document.querySelector("#previewDoneButton").addEventListener("click", () => {
-  const node = getSelected();
-  if (!node) return;
-  const wasDone = node.done;
-  const previousProgress = getProgressStats().progress;
-  node.done = !node.done;
-  save();
-  buzz(node.done ? "complete" : "soft");
-  render();
-  if (!wasDone && node.done) showCompletion(node, previousProgress);
+  toggleSelectedDone();
 });
 completionNextButton.addEventListener("click", () => {
   buzz("soft");
@@ -1202,6 +1268,13 @@ completionNextButton.addEventListener("click", () => {
 });
 document.querySelector("#shrinkButton").addEventListener("click", makeSelectedSmaller);
 document.querySelector("#deleteButton").addEventListener("click", deleteSelected);
+selectionHudDone.addEventListener("click", toggleSelectedDone);
+selectionHudEdit.addEventListener("click", () => {
+  buzz("soft");
+  inspector.classList.add("is-open", "is-editing");
+  inputs.title.focus();
+  renderSelectionHud();
+});
 coachStartButton.addEventListener("click", (event) => {
   dismissCoach();
   selectNextUnclearNode(event);

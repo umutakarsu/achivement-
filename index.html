@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Achievement Graph</title>
-    <link rel="stylesheet" href="styles.css?v=reward-onboarding-1" />
+    <link rel="stylesheet" href="styles.css?v=selection-experience-1" />
   </head>
   <body>
     <main class="graph-shell">
@@ -36,6 +36,16 @@
       </section>
 
       <aside class="graph-hint" id="graphHint" aria-live="polite"></aside>
+
+      <section class="selection-hud" id="selectionHud" aria-label="Selected node quick view">
+        <span class="eyebrow" id="selectionHudMeta">Selected</span>
+        <strong id="selectionHudTitle">Achievement</strong>
+        <p id="selectionHudAction">Define the next action.</p>
+        <div class="selection-hud-actions">
+          <button id="selectionHudDone" type="button">Done</button>
+          <button id="selectionHudEdit" class="quiet-button" type="button">Edit</button>
+        </div>
+      </section>
 
       <div class="feedback-layer" id="feedbackLayer" aria-hidden="true"></div>
 
@@ -304,6 +314,6 @@
       </button>
     </template>
 
-    <script src="app.js?v=reward-onboarding-1"></script>
+    <script src="app.js?v=selection-experience-1"></script>
   </body>
 </html>
