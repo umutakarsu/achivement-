@@ -423,6 +423,134 @@ input[type="range"] {
   }
 }
 
+.feedback-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  pointer-events: none;
+}
+
+.feedback-layer::before,
+.feedback-layer::after {
+  content: "";
+  position: absolute;
+  left: var(--buzz-x, 50%);
+  top: var(--buzz-y, 50%);
+  border-radius: 50%;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.42);
+}
+
+.feedback-layer::before {
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid rgba(245, 147, 0, 0.46);
+  box-shadow:
+    0 0 0 0 rgba(245, 147, 0, 0.18),
+    0 0 32px rgba(245, 147, 0, 0.18);
+}
+
+.feedback-layer::after {
+  width: 7rem;
+  height: 7rem;
+  background: radial-gradient(circle, rgba(245, 147, 0, 0.18), transparent 62%);
+  filter: blur(1px);
+}
+
+.feedback-layer.is-buzzing::before {
+  animation: buzzRing 520ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.feedback-layer.is-buzzing::after {
+  animation: buzzGlow 520ms ease-out;
+}
+
+.feedback-layer[data-buzz="complete"]::before,
+.feedback-layer[data-buzz="create"]::before {
+  width: 2.8rem;
+  height: 2.8rem;
+  border-color: rgba(245, 147, 0, 0.68);
+}
+
+.feedback-layer[data-buzz="complete"]::after,
+.feedback-layer[data-buzz="create"]::after {
+  width: 10rem;
+  height: 10rem;
+}
+
+.feedback-layer[data-buzz="delete"]::before {
+  border-color: rgba(196, 61, 61, 0.42);
+  box-shadow:
+    0 0 0 0 rgba(196, 61, 61, 0.12),
+    0 0 30px rgba(196, 61, 61, 0.12);
+}
+
+.feedback-layer[data-buzz="delete"]::after {
+  background: radial-gradient(circle, rgba(196, 61, 61, 0.12), transparent 62%);
+}
+
+button:active,
+.relation-chip:active,
+.graph-node:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.graph-node:active {
+  transform: translate(-50%, -50%) scale(0.985);
+}
+
+@keyframes buzzRing {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35);
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.4);
+    box-shadow:
+      0 0 0 1.1rem rgba(245, 147, 0, 0),
+      0 0 32px rgba(245, 147, 0, 0);
+  }
+}
+
+@keyframes buzzGlow {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35);
+  }
+
+  25% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-layer.is-buzzing::before,
+  .feedback-layer.is-buzzing::after {
+    animation: none;
+  }
+
+  button:active,
+  .relation-chip:active,
+  .graph-node:active {
+    transform: none;
+  }
+
+  .graph-node:active {
+    transform: translate(-50%, -50%);
+  }
+}
+
 @media (max-width: 760px) {
   .inspector {
     max-height: min(420px, calc(100vh - 6rem)) !important;

@@ -15,6 +15,7 @@ const graphShell = document.querySelector(".graph-shell");
 const graphCanvas = document.querySelector(".achievement-map");
 const mapEl = document.querySelector("#achievementMap");
 const linkLayer = document.querySelector("#linkLayer");
+const feedbackLayer = document.querySelector("#feedbackLayer");
 const template = document.querySelector("#nodeTemplate");
 const graphHint = document.querySelector("#graphHint");
 const modeLabel = document.querySelector("#modeLabel");
@@ -88,6 +89,7 @@ const view = {
 
 const activePointers = new Map();
 let completionTimer = null;
+let buzzTimer = null;
 
 function loadNodes() {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -116,6 +118,40 @@ function isLegacyExampleMap(value) {
 
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(nodes));
+}
+
+function buzz(type = "soft", event = null) {
+  const isReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const pattern = {
+    soft: 8,
+    select: 10,
+    create: [12, 24, 12],
+    complete: [18, 36, 24],
+    delete: [24, 32, 18],
+  }[type];
+
+  if (navigator.vibrate && pattern) {
+    navigator.vibrate(pattern);
+  }
+
+  if (!feedbackLayer || isReducedMotion) return;
+
+  const rect = graphShell.getBoundingClientRect();
+  const x = event?.clientX ? event.clientX - rect.left : rect.width / 2;
+  const y = event?.clientY ? event.clientY - rect.top : rect.height / 2;
+
+  feedbackLayer.style.setProperty("--buzz-x", `${x}px`);
+  feedbackLayer.style.setProperty("--buzz-y", `${y}px`);
+  feedbackLayer.dataset.buzz = type;
+  feedbackLayer.classList.remove("is-buzzing");
+  window.requestAnimationFrame(() => {
+    feedbackLayer.classList.add("is-buzzing");
+  });
+
+  clearTimeout(buzzTimer);
+  buzzTimer = setTimeout(() => {
+    feedbackLayer.classList.remove("is-buzzing");
+  }, 620);
 }
 
 function makeId(prefix = "node") {
@@ -516,7 +552,7 @@ function createRelationChip(label, id) {
   chip.className = "relation-chip";
   chip.type = "button";
   chip.textContent = label;
-  chip.addEventListener("click", () => selectNode(id));
+  chip.addEventListener("click", (event) => selectNode(id, { event }));
   return chip;
 }
 
@@ -566,6 +602,7 @@ function selectNode(id, options = {}) {
   if (options.focus) view.focusMode = true;
   inspector.classList.add("is-open");
   inspector.classList.toggle("is-editing", Boolean(options.editing));
+  if (!options.silent) buzz("select", options.event);
   render();
 }
 
@@ -577,7 +614,7 @@ function handleNodeClick(id, event) {
     return;
   }
 
-  selectNode(id);
+  selectNode(id, { event });
 }
 
 function selectNodeFromSearch(id) {
@@ -623,20 +660,22 @@ function zoomBy(multiplier) {
   zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, view.scale * multiplier);
 }
 
-function resetView() {
+function resetView(event = null) {
   view.scale = 1;
   view.x = 0;
   view.y = 0;
+  buzz("soft", event);
   applyViewTransform();
 }
 
-function toggleFocusMode() {
+function toggleFocusMode(event = null) {
   if (!selectedId) {
     selectedId = nodes[0]?.id || null;
   }
   if (!selectedId) return;
   view.focusMode = !view.focusMode;
   inspector.classList.add("is-open");
+  buzz("soft", event);
   render();
 }
 
@@ -672,10 +711,10 @@ function getPointerMetrics() {
   };
 }
 
-function selectNextUnclearNode() {
+function selectNextUnclearNode(event = null) {
   const next = getNextUnclearNode();
   if (!next) return;
-  selectNode(next.id);
+  selectNode(next.id, { event });
   centerNode(next.id);
 }
 
@@ -768,6 +807,7 @@ function createInitialMap() {
   inspector.classList.remove("is-editing");
   view.focusMode = false;
   save();
+  buzz("create");
   render();
 }
 
@@ -807,6 +847,7 @@ function addSupportingAchievement() {
   connectFromId = null;
   ritualCollapsed = true;
   view.focusMode = false;
+  buzz("soft");
   render();
 }
 
@@ -848,6 +889,7 @@ function createPlacedAchievement(clientX, clientY) {
   inspector.classList.add("is-open");
   inspector.classList.remove("is-editing");
   save();
+  buzz("create", { clientX, clientY });
   render();
 }
 
@@ -858,6 +900,7 @@ function startLinkMode() {
   placementMode = false;
   connectFromId = node.id;
   view.focusMode = false;
+  buzz("soft");
   render();
 }
 
@@ -875,6 +918,7 @@ function connectSelectedTo(parentId) {
   placementMode = false;
   inspector.classList.add("is-open");
   save();
+  buzz("create");
   render();
 }
 
@@ -884,6 +928,7 @@ function updateParent(parentId) {
 
   node.parentId = parentId || null;
   save();
+  buzz("soft");
   renderGraph();
   renderInspector();
 }
@@ -912,6 +957,7 @@ function makeSelectedSmaller() {
   inspector.classList.add("is-open");
   inspector.classList.remove("is-editing");
   save();
+  buzz("create");
   render();
 }
 
@@ -950,6 +996,7 @@ function deleteSelected() {
   }
 
   save();
+  buzz("delete");
   render();
 }
 
@@ -966,28 +1013,40 @@ Object.entries(inputs).forEach(([key, input]) => {
 });
 
 document.querySelector("#createMapButton").addEventListener("click", createInitialMap);
-document.querySelector("#newMapButton").addEventListener("click", openNewMap);
+document.querySelector("#newMapButton").addEventListener("click", (event) => {
+  buzz("soft", event);
+  openNewMap();
+});
 closeSetupButton.addEventListener("click", closeSetup);
 document.querySelector("#inspectorToggle").addEventListener("click", () => {
   if (!nodes.length) return;
+  buzz("soft");
   inspector.classList.add("is-open");
   inspector.classList.toggle("is-editing");
 });
 document.querySelector("#closeInspectorButton").addEventListener("click", () => {
+  buzz("soft");
   clearSelection();
 });
 document.querySelector("#addChildButton").addEventListener("click", addSupportingAchievement);
 document.querySelector("#nextNodeButton").addEventListener("click", selectNextUnclearNode);
-focusOpenButton.addEventListener("click", () => {
+focusOpenButton.addEventListener("click", (event) => {
   ritualCollapsed = true;
-  selectNextUnclearNode();
+  selectNextUnclearNode(event);
 });
 exploreMapButton.addEventListener("click", () => {
+  buzz("soft");
   ritualCollapsed = true;
   clearSelection();
 });
-document.querySelector("#zoomInButton").addEventListener("click", () => zoomBy(1.18));
-document.querySelector("#zoomOutButton").addEventListener("click", () => zoomBy(0.85));
+document.querySelector("#zoomInButton").addEventListener("click", (event) => {
+  buzz("soft", event);
+  zoomBy(1.18);
+});
+document.querySelector("#zoomOutButton").addEventListener("click", (event) => {
+  buzz("soft", event);
+  zoomBy(0.85);
+});
 document.querySelector("#fitButton").addEventListener("click", resetView);
 document.querySelector("#focusButton").addEventListener("click", toggleFocusMode);
 localDepthInput.addEventListener("input", () => {
@@ -996,11 +1055,13 @@ localDepthInput.addEventListener("input", () => {
   renderInspector();
 });
 document.querySelector("#editDetailsButton").addEventListener("click", () => {
+  buzz("soft");
   inspector.classList.add("is-editing");
   inputs.title.focus();
 });
 document.querySelector("#linkNodeButton").addEventListener("click", startLinkMode);
 document.querySelector("#globalViewButton").addEventListener("click", () => {
+  buzz("soft");
   view.focusMode = !view.focusMode;
   render();
 });
@@ -1010,10 +1071,12 @@ document.querySelector("#previewDoneButton").addEventListener("click", () => {
   const wasDone = node.done;
   node.done = !node.done;
   save();
+  buzz(node.done ? "complete" : "soft");
   render();
   if (!wasDone && node.done) showCompletion(node);
 });
 completionNextButton.addEventListener("click", () => {
+  buzz("soft");
   completionToast.classList.remove("is-visible");
   graphShell.classList.remove("is-celebrating");
   ritualCollapsed = true;
