@@ -917,9 +917,10 @@ function makeSelectedSmaller() {
 
 function deleteSelected() {
   const node = getSelected();
-  if (!node || !node.parentId) return;
+  if (!node) return;
 
   const toDelete = new Set([node.id]);
+  const fallbackId = node.parentId;
   let changed = true;
 
   while (changed) {
@@ -933,7 +934,21 @@ function deleteSelected() {
   }
 
   nodes = nodes.filter((candidate) => !toDelete.has(candidate.id));
-  selectedId = node.parentId;
+  selectedId = fallbackId && nodes.some((candidate) => candidate.id === fallbackId) ? fallbackId : null;
+
+  if (!nodes.length) {
+    setupOpen = true;
+    placementMode = false;
+    connectFromId = null;
+    view.focusMode = false;
+    inspector.classList.remove("is-open");
+    inspector.classList.remove("is-editing");
+  } else if (!selectedId) {
+    selectedId = nodes.find((candidate) => !candidate.parentId)?.id || nodes[0].id;
+    inspector.classList.add("is-open");
+    inspector.classList.remove("is-editing");
+  }
+
   save();
   render();
 }
