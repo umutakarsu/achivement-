@@ -458,6 +458,8 @@ function renderInspector() {
   if (!node) {
     inspector.classList.remove("is-open");
     inspector.classList.remove("is-editing");
+    inspector.classList.remove("is-node-done");
+    inspector.classList.remove("is-node-low-confidence");
     return;
   }
 
@@ -484,8 +486,10 @@ function renderPreview(node) {
   const relatedIds = getRelatedIds();
   const contextCount = view.focusMode ? `${visibleIds.size} visible` : `${relatedIds.size} linked`;
 
+  inspector.classList.toggle("is-node-done", Boolean(node.done));
+  inspector.classList.toggle("is-node-low-confidence", Number(node.confidence) < 65);
   previewTitle.textContent = node.title || "Untitled achievement";
-  previewMeta.textContent = `${node.done ? "Done" : "Open"} - ${node.confidence}% belief - ${met}/${checks.length} ready`;
+  previewMeta.textContent = `${node.done ? "Done" : "Open"} / ${node.confidence}% confidence / ${met} of ${checks.length} clear`;
   previewReadinessBar.style.width = `${Math.round((met / checks.length) * 100)}%`;
   previewWhy.textContent = node.why.trim() || "Add why this achievement matters so the node has emotional pull.";
   previewAction.textContent = node.action.trim() || "Define the smallest visible action.";
@@ -513,12 +517,12 @@ function renderPreview(node) {
 
   localDepthInput.value = String(view.localDepth);
   localDepthLabel.textContent = `${view.localDepth} ${view.localDepth === 1 ? "step" : "steps"}`;
-  document.querySelector("#previewDoneButton").textContent = node.done ? "Mark open" : "Mark done";
-  document.querySelector("#globalViewButton").textContent = view.focusMode ? "Global view" : "Focus local";
+  document.querySelector("#previewDoneButton").textContent = node.done ? "Reopen" : "Done";
+  document.querySelector("#globalViewButton").textContent = view.focusMode ? "All" : "Local";
   inspectorPath.textContent =
     getDepth(node) === 0
-      ? `Top achievement - ${contextCount}`
-      : `Supporting achievement - ${contextCount}`;
+      ? `Top achievement, ${contextCount}`
+      : `Supporting achievement, ${contextCount}`;
 }
 
 function createRelationChip(label, id) {
