@@ -91,6 +91,8 @@ let nodes = loadNodes();
 let selectedId = null;
 let setupOpen = nodes.length === 0;
 let ritualCollapsed = true;
+let placementMode = false;
+let connectFromId = null;
 
 const setupPanel = document.querySelector("#setupPanel");
 const closeSetupButton = document.querySelector("#closeSetupButton");
@@ -128,6 +130,10 @@ const inspector = document.querySelector("#inspector");
 const inspectorPath = document.querySelector("#inspectorPath");
 const previewTitle = document.querySelector("#previewTitle");
 const previewMeta = document.querySelector("#previewMeta");
+const previewStatusPill = document.querySelector("#previewStatusPill");
+const previewClearPill = document.querySelector("#previewClearPill");
+const confidenceRing = document.querySelector("#confidenceRing");
+const confidenceRingValue = document.querySelector("#confidenceRingValue");
 const previewReadinessBar = document.querySelector("#previewReadinessBar");
 const previewWhy = document.querySelector("#previewWhy");
 const previewAction = document.querySelector("#previewAction");
@@ -142,6 +148,7 @@ const confidenceValue = document.querySelector("#confidenceValue");
 
 const inputs = {
   title: document.querySelector("#titleInput"),
+  parent: document.querySelector("#parentInput"),
   why: document.querySelector("#whyInput"),
   evidence: document.querySelector("#evidenceInput"),
   blocker: document.querySelector("#blockerInput"),
@@ -215,6 +222,23 @@ function getDepth(node) {
   }
 
   return depth;
+}
+
+function isDescendant(candidateId, ancestorId) {
+  let current = nodes.find((node) => node.id === candidateId);
+
+  while (current?.parentId) {
+    if (current.parentId === ancestorId) return true;
+    current = nodes.find((node) => node.id === current.parentId);
+  }
+
+  return false;
+}
+
+function canConnectToParent(nodeId, parentId) {
+  if (!parentId) return true;
+  if (nodeId === parentId) return false;
+  return !isDescendant(parentId, nodeId);
 }
 
 function getRelatedIds() {
@@ -313,10 +337,16 @@ function getGraphLayout() {
         x = group.length === 1 ? 50 : 16 + index * (68 / (group.length - 1));
       }
 
-      positions.set(node.id, {
+      const autoPosition = {
         depth,
         x: depth === 0 ? 50 : Math.max(10, Math.min(90, x)),
         y: Math.max(12, Math.min(88, y)),
+      };
+
+      positions.set(node.id, {
+        depth,
+        x: Number.isFinite(node.x) ? node.x : autoPosition.x,
+        y: Number.isFinite(node.y) ? node.y : autoPosition.y,
       });
     });
   });
@@ -368,9 +398,10 @@ function renderGraph() {
     button.classList.toggle("is-ready", isReady(node));
     button.classList.toggle("is-low-confidence", Number(node.confidence) < 65);
     button.classList.toggle("is-dimmed", hasSelection && !relatedIds.has(node.id));
+    button.classList.toggle("is-link-target", Boolean(connectFromId) && canConnectToParent(connectFromId, node.id));
     button.hidden = !visibleIds.has(node.id);
     button.querySelector(".node-label").textContent = node.title || "Untitled achievement";
-    button.addEventListener("click", () => selectNode(node.id));
+    button.addEventListener("click", (event) => handleNodeClick(node.id, event));
     mapEl.append(button);
   });
 
@@ -395,7 +426,13 @@ function renderHint() {
   const mode = view.focusMode ? "Local focus" : "Global graph";
   modeLabel.textContent = mode;
   readinessSummary.textContent = `${ready}/${nodes.length} clear`;
-  graphHint.textContent = `${mode}. ${done}/${nodes.length} complete. ${ready}/${nodes.length} clear enough to act on. Average confidence ${avgConfidence}%. Next review: ${next?.title || "none"}. Press / to find, scroll to zoom, drag empty space to pan.`;
+  if (placementMode) {
+    graphHint.textContent = "Place mode. Click anywhere on the canvas to create the new achievement there.";
+  } else if (connectFromId) {
+    graphHint.textContent = "Link mode. Click the node this achievement depends on. Press Escape to cancel.";
+  } else {
+    graphHint.textContent = `${mode}. ${done}/${nodes.length} complete. ${ready}/${nodes.length} clear enough to act on. Average confidence ${avgConfidence}%. Next review: ${next?.title || "none"}. Press / to find, scroll to zoom, drag empty space to pan.`;
+  }
   renderFocusTray();
 }
 
@@ -464,7 +501,9 @@ function renderInspector() {
   }
 
   renderPreview(node);
+  renderParentOptions(node);
   inputs.title.value = node.title;
+  inputs.parent.value = node.parentId || "";
   inputs.why.value = node.why;
   inputs.evidence.value = node.evidence;
   inputs.blocker.value = node.blocker;
@@ -489,7 +528,13 @@ function renderPreview(node) {
   inspector.classList.toggle("is-node-done", Boolean(node.done));
   inspector.classList.toggle("is-node-low-confidence", Number(node.confidence) < 65);
   previewTitle.textContent = node.title || "Untitled achievement";
-  previewMeta.textContent = `${node.done ? "Done" : "Open"} / ${node.confidence}% confidence / ${met} of ${checks.length} clear`;
+  previewMeta.textContent =
+    getDepth(node) === 0 ? `Top achievement - ${contextCount}` : `Supporting achievement - ${contextCount}`;
+  previewStatusPill.textContent = node.done ? "Done" : "Open";
+  previewStatusPill.classList.toggle("is-done", Boolean(node.done));
+  previewClearPill.textContent = `${met} of ${checks.length} clear`;
+  confidenceRing.style.setProperty("--confidence", `${Number(node.confidence || 0)}%`);
+  confidenceRingValue.textContent = String(node.confidence);
   previewReadinessBar.style.width = `${Math.round((met / checks.length) * 100)}%`;
   previewWhy.textContent = node.why.trim() || "Add why this achievement matters so the node has emotional pull.";
   previewAction.textContent = node.action.trim() || "Define the smallest visible action.";
@@ -518,11 +563,30 @@ function renderPreview(node) {
   localDepthInput.value = String(view.localDepth);
   localDepthLabel.textContent = `${view.localDepth} ${view.localDepth === 1 ? "step" : "steps"}`;
   document.querySelector("#previewDoneButton").textContent = node.done ? "Reopen" : "Done";
+  document.querySelector("#linkNodeButton").textContent = connectFromId === node.id ? "Pick..." : "Link";
   document.querySelector("#globalViewButton").textContent = view.focusMode ? "All" : "Local";
   inspectorPath.textContent =
     getDepth(node) === 0
       ? `Top achievement, ${contextCount}`
       : `Supporting achievement, ${contextCount}`;
+}
+
+function renderParentOptions(node) {
+  inputs.parent.innerHTML = "";
+
+  const topOption = document.createElement("option");
+  topOption.value = "";
+  topOption.textContent = "No parent, place as top-level";
+  inputs.parent.append(topOption);
+
+  nodes
+    .filter((candidate) => candidate.id !== node.id && canConnectToParent(node.id, candidate.id))
+    .forEach((candidate) => {
+      const option = document.createElement("option");
+      option.value = candidate.id;
+      option.textContent = candidate.title || "Untitled achievement";
+      inputs.parent.append(option);
+    });
 }
 
 function createRelationChip(label, id) {
@@ -575,10 +639,23 @@ function renderReadiness(node) {
 function selectNode(id, options = {}) {
   selectedId = id;
   ritualCollapsed = true;
+  placementMode = false;
+  connectFromId = null;
   if (options.focus) view.focusMode = true;
   inspector.classList.add("is-open");
   inspector.classList.toggle("is-editing", Boolean(options.editing));
   render();
+}
+
+function handleNodeClick(id, event) {
+  event.stopPropagation();
+
+  if (connectFromId) {
+    connectSelectedTo(id);
+    return;
+  }
+
+  selectNode(id);
 }
 
 function selectNodeFromSearch(id) {
@@ -602,6 +679,8 @@ function applyViewTransform() {
   graphShell.classList.toggle("is-zoomed-out", view.scale < 0.72);
   graphShell.classList.toggle("is-focus-mode", view.focusMode);
   graphShell.classList.toggle("has-selection", Boolean(selectedId));
+  graphShell.classList.toggle("is-placing", placementMode);
+  graphShell.classList.toggle("is-linking", Boolean(connectFromId));
 }
 
 function zoomAt(clientX, clientY, nextScale) {
@@ -651,6 +730,8 @@ function centerNode(id) {
 
 function clearSelection() {
   selectedId = null;
+  placementMode = false;
+  connectFromId = null;
   view.focusMode = false;
   inspector.classList.remove("is-open");
   inspector.classList.remove("is-editing");
@@ -759,6 +840,8 @@ function createInitialMap() {
   selectedId = topId;
   setupOpen = false;
   ritualCollapsed = true;
+  placementMode = false;
+  connectFromId = null;
   inspector.classList.add("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
@@ -771,6 +854,8 @@ function useExample() {
   selectedId = null;
   setupOpen = false;
   ritualCollapsed = true;
+  placementMode = false;
+  connectFromId = null;
   inspector.classList.remove("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
@@ -782,6 +867,8 @@ function openNewMap() {
   setupOpen = true;
   ritualCollapsed = true;
   selectedId = null;
+  placementMode = false;
+  connectFromId = null;
   inspector.classList.remove("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
@@ -795,23 +882,47 @@ function closeSetup() {
   if (!nodes.length) return;
   setupOpen = false;
   ritualCollapsed = true;
+  placementMode = false;
+  connectFromId = null;
   setupGoalInput.value = "";
   setupPrereqInput.value = "";
   render();
 }
 
 function addSupportingAchievement() {
-  const parent = getSelected() || nodes[0];
-  if (!parent) {
+  if (!nodes.length) {
     openNewMap();
     return;
   }
 
+  placementMode = true;
+  connectFromId = null;
+  ritualCollapsed = true;
+  view.focusMode = false;
+  render();
+}
+
+function getGraphPoint(clientX, clientY) {
+  const rect = graphCanvas.getBoundingClientRect();
+  const x = ((clientX - rect.left - view.x) / view.scale / rect.width) * 100;
+  const y = ((clientY - rect.top - view.y) / view.scale / rect.height) * 100;
+
+  return {
+    x: Math.max(5, Math.min(95, x)),
+    y: Math.max(8, Math.min(92, y)),
+  };
+}
+
+function createPlacedAchievement(clientX, clientY) {
+  if (!placementMode) return;
+  const point = getGraphPoint(clientX, clientY);
+  const parent = getSelected();
   const id = makeId("support");
+
   nodes.push({
     id,
-    parentId: parent.id,
-    title: "New supporting achievement",
+    parentId: parent?.id || null,
+    title: "New achievement",
     why: "",
     blocker: "",
     confidence: 50,
@@ -819,12 +930,54 @@ function addSupportingAchievement() {
     evidence: "",
     action: "",
     done: false,
+    x: point.x,
+    y: point.y,
   });
+
   selectedId = id;
+  placementMode = false;
+  connectFromId = null;
   inspector.classList.add("is-open");
-  inspector.classList.add("is-editing");
+  inspector.classList.remove("is-editing");
   save();
   render();
+}
+
+function startLinkMode() {
+  const node = getSelected();
+  if (!node) return;
+
+  placementMode = false;
+  connectFromId = node.id;
+  view.focusMode = false;
+  render();
+}
+
+function connectSelectedTo(parentId) {
+  const node = nodes.find((candidate) => candidate.id === connectFromId);
+  if (!node) return;
+  if (!canConnectToParent(node.id, parentId)) {
+    graphHint.textContent = "That link would create a loop. Choose a different node.";
+    return;
+  }
+
+  node.parentId = parentId;
+  selectedId = node.id;
+  connectFromId = null;
+  placementMode = false;
+  inspector.classList.add("is-open");
+  save();
+  render();
+}
+
+function updateParent(parentId) {
+  const node = getSelected();
+  if (!node || !canConnectToParent(node.id, parentId)) return;
+
+  node.parentId = parentId || null;
+  save();
+  renderGraph();
+  renderInspector();
 }
 
 function makeSelectedSmaller() {
@@ -879,6 +1032,11 @@ function deleteSelected() {
 
 Object.entries(inputs).forEach(([key, input]) => {
   input.addEventListener("input", () => {
+    if (key === "parent") {
+      updateParent(input.value);
+      return;
+    }
+
     const value = key === "confidence" ? Number(input.value) : input.value;
     updateSelected(key, value);
   });
@@ -920,6 +1078,7 @@ document.querySelector("#editDetailsButton").addEventListener("click", () => {
   inspector.classList.add("is-editing");
   inputs.title.focus();
 });
+document.querySelector("#linkNodeButton").addEventListener("click", startLinkMode);
 document.querySelector("#previewAddButton").addEventListener("click", addSupportingAchievement);
 document.querySelector("#globalViewButton").addEventListener("click", () => {
   view.focusMode = !view.focusMode;
@@ -962,6 +1121,7 @@ graphCanvas.addEventListener(
 
 graphCanvas.addEventListener("pointerdown", (event) => {
   if (event.target.closest(".graph-node") || event.target.closest(".right-rail")) return;
+  if (placementMode) return;
   if (event.button !== 0 && event.button !== 1) return;
 
   activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -981,6 +1141,11 @@ graphCanvas.addEventListener("pointerdown", (event) => {
   view.panStartY = event.clientY;
   view.startX = view.x;
   view.startY = view.y;
+});
+
+graphCanvas.addEventListener("click", (event) => {
+  if (!placementMode || event.target.closest(".graph-node")) return;
+  createPlacedAchievement(event.clientX, event.clientY);
 });
 
 graphCanvas.addEventListener("pointermove", (event) => {
@@ -1016,6 +1181,12 @@ graphCanvas.addEventListener("pointercancel", () => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    if (placementMode || connectFromId) {
+      placementMode = false;
+      connectFromId = null;
+      render();
+      return;
+    }
     if (setupOpen && nodes.length) {
       closeSetup();
       return;

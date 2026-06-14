@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Achievement Graph</title>
-    <link rel="stylesheet" href="styles.css?v=selected-node-ux-4" />
+    <link rel="stylesheet" href="styles.css?v=frosted-glass-2" />
   </head>
   <body>
     <main class="graph-shell">
@@ -85,7 +85,7 @@
         >
           Edit
         </button>
-        <button id="addChildButton" type="button" aria-label="Add supporting achievement" data-tip="Add child">
+        <button id="addChildButton" type="button" aria-label="Place new achievement" data-tip="Place node">
           Add
         </button>
         <button
@@ -151,20 +151,30 @@
 
         <section class="node-preview" aria-label="Selected achievement preview">
           <div class="preview-title-row">
-            <div class="preview-node-mark" aria-hidden="true"></div>
             <div class="preview-title-copy">
-              <span id="previewMeta"></span>
               <h2 id="previewTitle"></h2>
+              <span id="previewMeta"></span>
             </div>
-            <div class="preview-readiness" aria-label="Readiness score">
-              <span id="previewReadinessBar"></span>
+            <div class="confidence-ring" id="confidenceRing" aria-label="Confidence score">
+              <span id="confidenceRingValue">75</span>
+              <em>Conf</em>
             </div>
+          </div>
+          <div class="preview-pills" aria-label="Achievement status">
+            <span id="previewStatusPill" class="preview-pill is-status">Open</span>
+            <span id="previewClearPill" class="preview-pill">6 of 6 clear</span>
+          </div>
+          <div class="preview-readiness" aria-label="Readiness score">
+            <span id="previewReadinessBar"></span>
           </div>
           <p id="previewWhy" class="preview-why"></p>
 
           <div class="next-action-card">
-            <span class="eyebrow">Next action</span>
-            <strong id="previewAction"></strong>
+            <span class="action-check" aria-hidden="true"></span>
+            <div>
+              <span class="eyebrow">Next action</span>
+              <strong id="previewAction"></strong>
+            </div>
           </div>
 
           <div class="relation-block">
@@ -183,6 +193,7 @@
           <div class="preview-actions">
             <button id="previewDoneButton" class="primary-preview-action" type="button">Done</button>
             <button id="editDetailsButton" type="button">Edit</button>
+            <button id="linkNodeButton" type="button">Link</button>
             <button id="previewAddButton" type="button">Add</button>
             <button id="globalViewButton" type="button">Local</button>
           </div>
@@ -192,6 +203,11 @@
           <label>
             Achievement
             <input id="titleInput" type="text" placeholder="Specific achievement, not a vague theme" />
+          </label>
+
+          <label>
+            Connect under
+            <select id="parentInput"></select>
           </label>
 
           <label>
@@ -260,6 +276,6 @@
       </button>
     </template>
 
-    <script src="app.js?v=selected-node-ux-4"></script>
+    <script src="app.js?v=frosted-glass-2"></script>
   </body>
 </html>
