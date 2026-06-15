@@ -41,6 +41,7 @@ const rewardCopy = document.querySelector("#rewardCopy");
 const mapCoach = document.querySelector("#mapCoach");
 const coachStartButton = document.querySelector("#coachStartButton");
 const coachDismissButton = document.querySelector("#coachDismissButton");
+const addChildButton = document.querySelector("#addChildButton");
 const ritualWish = document.querySelector("#ritualWish");
 const ritualOutcome = document.querySelector("#ritualOutcome");
 const ritualObstacle = document.querySelector("#ritualObstacle");
@@ -316,7 +317,7 @@ function getGuidance(node) {
   if (node.done) {
     return {
       tone: "done",
-      text: "This promise is kept. Move to the next open node or add a harder version.",
+      text: "Promise kept. Choose the next open node.",
     };
   }
 
@@ -327,7 +328,7 @@ function getGuidance(node) {
   if (!missing) {
     return {
       tone: "ready",
-      text: "This is clear enough. Do the next action, then mark it done.",
+      text: "Clear enough. Do the next action, then mark it done.",
     };
   }
 
@@ -343,7 +344,7 @@ function getGuidance(node) {
   if (childCount === 0 && Number(node.confidence) < 65) {
     return {
       tone: "small",
-      text: "Add one sub-achievement that removes the hardest blocker.",
+      text: "Add one smaller support node for the hardest blocker.",
     };
   }
 
@@ -498,12 +499,22 @@ function renderHint() {
   modeLabel.textContent = mode;
   readinessSummary.textContent = `${ready}/${nodes.length} clear`;
   if (placementMode) {
-    graphHint.textContent = "Place mode. Click anywhere on the canvas to create the new achievement there.";
+    const parent = getSelected();
+    graphHint.textContent = parent
+      ? `Add mode: click the canvas to place a support node under "${shorten(parent.title, "this node", 34)}". Esc cancels.`
+      : "Add mode: click the canvas to place a new top-level node. Esc cancels.";
   } else if (connectFromId) {
-    graphHint.textContent = "Link mode. Click the node this achievement depends on. Press Escape to cancel.";
+    const node = nodes.find((candidate) => candidate.id === connectFromId);
+    graphHint.textContent = `Connect mode: click the parent node for "${shorten(node?.title, "this node", 34)}". Esc cancels.`;
   } else {
-    graphHint.textContent = `${mode}. ${done}/${nodes.length} complete. ${ready}/${nodes.length} clear enough to act on. Average confidence ${avgConfidence}%. Next review: ${next?.title || "none"}. Press / to find, scroll to zoom, drag empty space to pan.`;
+    graphHint.textContent = next
+      ? `${done}/${nodes.length} done - next: ${shorten(next.title, "review a node", 42)}. Scroll zooms, drag pans, / finds.`
+      : `${done}/${nodes.length} done - map is clear. Add the next branch when ready.`;
   }
+  const addLabel = selectedId ? "Add support" : "Add node";
+  addChildButton.textContent = selectedId ? "Support" : "Add";
+  addChildButton.setAttribute("aria-label", addLabel);
+  addChildButton.dataset.tip = addLabel;
   renderFocusTray();
 }
 
@@ -527,8 +538,10 @@ function renderSelectionHud() {
   selectionHudMeta.textContent = `${depthLabel} - ${met}/${checks.length} clear`;
   selectionHudTitle.textContent = node.title || "Untitled achievement";
   selectionHudAction.textContent = node.done
-    ? "Done. Choose the next open node."
-    : node.action.trim() || getGuidance(node).text;
+    ? "Done. Pick the next open move."
+    : node.action.trim()
+      ? `Next: ${node.action.trim()}`
+      : getGuidance(node).text;
   selectionHudDone.textContent = node.done ? "Reopen" : "Done";
 }
 
@@ -644,11 +657,10 @@ function renderPreview(node) {
   inspector.classList.toggle("is-node-done", Boolean(node.done));
   inspector.classList.toggle("is-node-low-confidence", Number(node.confidence) < 65);
   previewTitle.textContent = node.title || "Untitled achievement";
-  previewMeta.textContent =
-    getDepth(node) === 0 ? `Top achievement - ${contextCount}` : `Supporting achievement - ${contextCount}`;
+  previewMeta.textContent = getDepth(node) === 0 ? `Peak - ${contextCount}` : `Support - ${contextCount}`;
   previewStatusPill.textContent = node.done ? "Done" : "Open";
   previewStatusPill.classList.toggle("is-done", Boolean(node.done));
-  previewClearPill.textContent = `${met} of ${checks.length} clear`;
+  previewClearPill.textContent = `${met}/${checks.length} clear`;
   const guidance = getGuidance(node);
   previewGuidance.dataset.tone = guidance.tone;
   previewGuidanceText.textContent = guidance.text;
@@ -664,7 +676,7 @@ function renderPreview(node) {
   } else {
     const chip = document.createElement("span");
     chip.className = "relation-chip is-static";
-    chip.textContent = "Top achievement";
+    chip.textContent = "Peak";
     relationChips.append(chip);
   }
 
@@ -675,14 +687,14 @@ function renderPreview(node) {
   if (!children.length) {
     const chip = document.createElement("span");
     chip.className = "relation-chip is-static";
-    chip.textContent = "No supporting nodes yet";
+    chip.textContent = "No support nodes yet";
     relationChips.append(chip);
   }
 
   localDepthInput.value = String(view.localDepth);
   localDepthLabel.textContent = `${view.localDepth} ${view.localDepth === 1 ? "step" : "steps"}`;
   document.querySelector("#previewDoneButton").textContent = node.done ? "Reopen" : "Done";
-  document.querySelector("#linkNodeButton").textContent = connectFromId === node.id ? "Pick..." : "Link";
+  document.querySelector("#linkNodeButton").textContent = connectFromId === node.id ? "Pick parent..." : "Connect";
   document.querySelector("#globalViewButton").textContent = view.focusMode ? "All" : "Local";
   inspectorPath.textContent =
     getDepth(node) === 0
@@ -1219,7 +1231,7 @@ document.querySelector("#closeInspectorButton").addEventListener("click", () => 
   buzz("soft");
   clearSelection();
 });
-document.querySelector("#addChildButton").addEventListener("click", addSupportingAchievement);
+addChildButton.addEventListener("click", addSupportingAchievement);
 document.querySelector("#nextNodeButton").addEventListener("click", selectNextUnclearNode);
 focusOpenButton.addEventListener("click", (event) => {
   ritualCollapsed = true;
