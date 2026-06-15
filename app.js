@@ -107,6 +107,8 @@ const view = {
 const activePointers = new Map();
 let completionTimer = null;
 let buzzTimer = null;
+let nodeDrag = null;
+let suppressedNodeClickId = null;
 
 function loadNodes() {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -460,6 +462,7 @@ function renderGraph() {
   nodes.forEach((node) => {
     const position = positions.get(node.id);
     const button = template.content.firstElementChild.cloneNode(true);
+    const canBeLinkTarget = Boolean(connectFromId) && node.id !== connectFromId && canConnectToParent(connectFromId, node.id);
     button.dataset.id = node.id;
     button.dataset.depth = String(position.depth);
     button.style.left = `${position.x}%`;
@@ -470,9 +473,16 @@ function renderGraph() {
     button.classList.toggle("is-low-confidence", Number(node.confidence) < 65);
     button.classList.toggle("is-dimmed", hasSelection && !relatedIds.has(node.id));
     button.classList.toggle("is-neighbor", hasSelection && node.id !== selectedId && directNeighborIds.has(node.id));
-    button.classList.toggle("is-link-target", Boolean(connectFromId) && canConnectToParent(connectFromId, node.id));
+    button.classList.toggle("is-connect-source", connectFromId === node.id);
+    button.classList.toggle("is-link-target", canBeLinkTarget);
+    button.classList.toggle("is-link-disabled", Boolean(connectFromId) && node.id !== connectFromId && !canBeLinkTarget);
     button.hidden = !visibleIds.has(node.id);
     button.querySelector(".node-label").textContent = node.title || "Untitled achievement";
+    button.addEventListener("pointerdown", (event) => beginNodeDrag(node.id, event));
+    button.addEventListener("pointermove", handleNodeDragMove);
+    button.addEventListener("pointerup", endNodeDrag);
+    button.addEventListener("pointercancel", cancelNodeDrag);
+    button.addEventListener("mousedown", (event) => beginNodeDrag(node.id, event));
     button.addEventListener("click", (event) => handleNodeClick(node.id, event));
     mapEl.append(button);
   });
@@ -545,6 +555,35 @@ function renderSelectionHud() {
   selectionHudDone.textContent = node.done ? "Reopen" : "Done";
 }
 
+function repaintGraphGeometry() {
+  const positions = getGraphLayout();
+  const visibleIds = getVisibleIds();
+
+  mapEl.querySelectorAll(".graph-node").forEach((button) => {
+    const position = positions.get(button.dataset.id);
+    if (!position) return;
+
+    button.dataset.depth = String(position.depth);
+    button.style.left = `${position.x}%`;
+    button.style.top = `${position.y}%`;
+    button.hidden = !visibleIds.has(button.dataset.id);
+  });
+
+  linkLayer.querySelectorAll(".graph-link").forEach((line) => {
+    const start = positions.get(line.dataset.parentId);
+    const end = positions.get(line.dataset.childId);
+    if (!start || !end) return;
+
+    line.setAttribute("x1", start.x);
+    line.setAttribute("y1", start.y);
+    line.setAttribute("x2", end.x);
+    line.setAttribute("y2", end.y);
+    line.style.display = visibleIds.has(line.dataset.parentId) && visibleIds.has(line.dataset.childId) ? "" : "none";
+  });
+
+  renderSelectionHud();
+}
+
 function renderFocusTray() {
   focusTray.classList.toggle("is-hidden", !nodes.length || setupOpen);
   graphShell.classList.remove("is-ritual-open");
@@ -605,11 +644,13 @@ function showCompletion(node, previousProgress = 0) {
   completionNextButton.hidden = !next || next.id === node.id;
   completionToast.classList.add("is-visible");
   graphShell.classList.add("is-celebrating");
+  graphShell.classList.add("is-path-unlocked");
   graphShell.classList.toggle("is-milestone", Boolean(milestone));
 
   completionTimer = setTimeout(() => {
     completionToast.classList.remove("is-visible");
     graphShell.classList.remove("is-celebrating");
+    graphShell.classList.remove("is-path-unlocked");
     graphShell.classList.remove("is-milestone");
   }, 4200);
 }
@@ -782,6 +823,12 @@ function selectNode(id, options = {}) {
 
 function handleNodeClick(id, event) {
   event.stopPropagation();
+
+  if (suppressedNodeClickId === id) {
+    suppressedNodeClickId = null;
+    event.preventDefault();
+    return;
+  }
 
   if (connectFromId) {
     connectSelectedTo(id);
@@ -1052,6 +1099,87 @@ function getGraphPoint(clientX, clientY) {
   };
 }
 
+function beginNodeDrag(id, event) {
+  if (nodeDrag) return;
+  if (connectFromId || placementMode || (event.button ?? 0) !== 0) return;
+
+  const position = getGraphLayout().get(id);
+  if (!position) return;
+  const pointerId = event.pointerId ?? "mouse";
+
+  nodeDrag = {
+    id,
+    pointerId,
+    element: event.currentTarget,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    startX: position.x,
+    startY: position.y,
+    moved: false,
+  };
+
+  if (event.pointerId !== undefined && event.currentTarget.setPointerCapture) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  event.currentTarget.classList.add("is-dragging");
+  graphShell.classList.add("is-dragging-node");
+}
+
+function handleNodeDragMove(event) {
+  const pointerId = event.pointerId ?? "mouse";
+  if (!nodeDrag || nodeDrag.pointerId !== pointerId) return;
+
+  const node = nodes.find((candidate) => candidate.id === nodeDrag.id);
+  if (!node) return;
+
+  const deltaX = event.clientX - nodeDrag.startClientX;
+  const deltaY = event.clientY - nodeDrag.startClientY;
+  if (!nodeDrag.moved && Math.hypot(deltaX, deltaY) < 4) return;
+
+  const rect = graphCanvas.getBoundingClientRect();
+  nodeDrag.moved = true;
+  node.x = Math.max(5, Math.min(95, nodeDrag.startX + (deltaX / view.scale / rect.width) * 100));
+  node.y = Math.max(8, Math.min(92, nodeDrag.startY + (deltaY / view.scale / rect.height) * 100));
+  selectedId = node.id;
+  event.preventDefault();
+  repaintGraphGeometry();
+  applyViewTransform();
+}
+
+function finishNodeDrag(event, wasCancelled = false) {
+  const pointerId = event.pointerId ?? "mouse";
+  if (!nodeDrag || nodeDrag.pointerId !== pointerId) return;
+
+  const draggedId = nodeDrag.id;
+  const moved = nodeDrag.moved;
+  const element = nodeDrag.element;
+  nodeDrag = null;
+
+  element?.classList.remove("is-dragging");
+  graphShell.classList.remove("is-dragging-node");
+  if (event.pointerId !== undefined && element?.hasPointerCapture?.(event.pointerId)) {
+    element.releasePointerCapture(event.pointerId);
+  }
+
+  if (!moved || wasCancelled) return;
+
+  suppressedNodeClickId = draggedId;
+  window.setTimeout(() => {
+    if (suppressedNodeClickId === draggedId) suppressedNodeClickId = null;
+  }, 0);
+  save();
+  buzz("soft", event);
+  render();
+}
+
+function endNodeDrag(event) {
+  finishNodeDrag(event);
+}
+
+function cancelNodeDrag(event) {
+  finishNodeDrag(event, true);
+}
+
 function createPlacedAchievement(clientX, clientY) {
   if (!placementMode) return;
   const point = getGraphPoint(clientX, clientY);
@@ -1275,6 +1403,8 @@ completionNextButton.addEventListener("click", () => {
   buzz("soft");
   completionToast.classList.remove("is-visible");
   graphShell.classList.remove("is-celebrating");
+  graphShell.classList.remove("is-path-unlocked");
+  graphShell.classList.remove("is-milestone");
   ritualCollapsed = true;
   selectNextUnclearNode();
 });
@@ -1359,6 +1489,9 @@ graphCanvas.addEventListener("pointermove", (event) => {
   view.y = view.startY + event.clientY - view.panStartY;
   applyViewTransform();
 });
+
+document.addEventListener("mousemove", handleNodeDragMove);
+document.addEventListener("mouseup", endNodeDrag);
 
 graphCanvas.addEventListener("pointerup", (event) => {
   activePointers.delete(event.pointerId);

@@ -4683,3 +4683,188 @@ body,
     text-align: center;
   }
 }
+
+/* Interaction polish: draggable nodes, clearer connecting, and reward feedback. */
+.graph-node {
+  cursor: grab;
+  touch-action: none;
+  transition:
+    opacity 180ms ease,
+    filter 180ms ease;
+}
+
+.graph-node.is-dragging {
+  z-index: 8;
+  cursor: grabbing;
+}
+
+.graph-node.is-dragging .node-dot {
+  background: #ffffff;
+  box-shadow:
+    0 0 0 0.22rem rgba(218, 232, 255, 0.24),
+    0 0 34px rgba(218, 232, 255, 0.34);
+}
+
+.graph-shell.is-dragging-node .selection-hud {
+  display: none !important;
+}
+
+.graph-shell.is-dragging-node .achievement-map {
+  cursor: grabbing;
+}
+
+.graph-shell.is-linking .graph-link {
+  opacity: 0.28;
+}
+
+.graph-shell.is-linking .graph-node.is-link-disabled {
+  opacity: 0.24;
+  filter: grayscale(0.45);
+}
+
+.graph-shell.is-linking .graph-node.is-connect-source {
+  opacity: 1;
+  z-index: 7;
+}
+
+.graph-shell.is-linking .graph-node.is-connect-source .node-dot {
+  background: #ffffff;
+  box-shadow:
+    0 0 0 0.22rem rgba(218, 232, 255, 0.2),
+    0 0 30px rgba(218, 232, 255, 0.28);
+}
+
+.graph-shell.is-linking .graph-node.is-link-target {
+  opacity: 1;
+  filter: none;
+}
+
+.graph-shell.is-linking .graph-node.is-link-target .node-dot {
+  background: #eef5ff;
+  box-shadow:
+    0 0 0 0.24rem rgba(218, 232, 255, 0.26),
+    0 0 26px rgba(218, 232, 255, 0.32);
+}
+
+.graph-shell.is-linking .graph-node.is-link-target::after {
+  content: "Connect";
+  position: absolute;
+  left: 50%;
+  top: -1.95rem;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  background: rgba(250, 250, 252, 0.86);
+  box-shadow: 0 16px 34px -22px rgba(0, 0, 0, 0.58);
+  color: #515154;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0;
+  transform: translateX(-50%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+}
+
+.graph-shell.is-path-unlocked .graph-link.is-direct,
+.graph-shell.is-path-unlocked .graph-link.is-complete {
+  animation: pathUnlock 980ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.graph-shell.is-path-unlocked .focus-progress span,
+.graph-shell.is-path-unlocked .preview-readiness span {
+  animation: progressGlow 980ms ease-out;
+}
+
+.completion-toast {
+  overflow: hidden;
+}
+
+.completion-toast.is-visible {
+  animation: rewardLift 420ms cubic-bezier(0.2, 0.85, 0.2, 1);
+}
+
+.completion-toast::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(120deg, transparent 0 32%, rgba(255, 255, 255, 0.62) 46%, transparent 62% 100%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+
+.graph-shell.is-path-unlocked .completion-toast::after {
+  animation: rewardSweep 1100ms ease-out 120ms;
+}
+
+@keyframes pathUnlock {
+  0% {
+    opacity: 0.28;
+    stroke-width: 0.12;
+    filter: drop-shadow(0 0 0 rgba(218, 232, 255, 0));
+  }
+
+  42% {
+    opacity: 1;
+    stroke-width: 0.36;
+    filter: drop-shadow(0 0 10px rgba(218, 232, 255, 0.42));
+  }
+
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 0 rgba(218, 232, 255, 0));
+  }
+}
+
+@keyframes progressGlow {
+  0% {
+    filter: brightness(1);
+  }
+
+  42% {
+    filter: brightness(1.24) drop-shadow(0 0 12px rgba(94, 155, 255, 0.36));
+  }
+
+  100% {
+    filter: brightness(1);
+  }
+}
+
+@keyframes rewardLift {
+  0% {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.985);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes rewardSweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-120%);
+  }
+
+  24% {
+    opacity: 0.62;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(120%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-shell.is-path-unlocked .graph-link.is-direct,
+  .graph-shell.is-path-unlocked .graph-link.is-complete,
+  .graph-shell.is-path-unlocked .focus-progress span,
+  .graph-shell.is-path-unlocked .preview-readiness span,
+  .completion-toast.is-visible,
+  .graph-shell.is-path-unlocked .completion-toast::after {
+    animation: none;
+  }
+}
