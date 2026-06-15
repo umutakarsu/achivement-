@@ -151,3 +151,89 @@ test("legacy example map is cleared", () => {
   assert.equal(app.graphNodeCount(), 0, "legacy map should be cleared, rendering no nodes");
   assert.ok(app.hasSetupPanel(), "setup panel should be present after clearing the legacy map");
 });
+
+// --- Regression tests added by the correctness pass --------------------------
+
+test("non-legacy graph is never wiped from storage", () => {
+  // A real user's graph must survive boot: loadNodes() must not destructively
+  // remove the storage key. Boot a normal (non-legacy) graph and confirm both
+  // that it renders AND that the stored data is still present afterwards.
+  const STORAGE_KEY = "achievement-graph-v2";
+  const app = bootApp({ storage: validGraph() });
+
+  assert.deepEqual(app.errors.map((e) => e.message), [], "boot should not throw");
+  assert.equal(app.graphNodeCount(), 3, "the user's graph should render");
+
+  const stored = app.window.localStorage.getItem(STORAGE_KEY);
+  assert.ok(stored, "the storage key must NOT be removed for a non-legacy graph");
+  const parsed = JSON.parse(stored);
+  assert.equal(parsed.length, 3, "stored graph should still contain all nodes");
+});
+
+test("legacy map path does not destructively remove the storage key", () => {
+  // The legacy demo still boots into an empty setup graph, but loadNodes() must
+  // NOT call localStorage.removeItem -- destroying matching user data is the
+  // data-loss bug we fixed. The key may remain populated; what matters is it is
+  // not wiped.
+  const STORAGE_KEY = "achievement-graph-v2";
+  const legacyIds = ["top", "base-fitness", "fuel-recovery", "shoes", "routes", "sleep", "race-fuel"];
+  const legacy = legacyIds.map((id) =>
+    fullNode({ id, parentId: id === "top" ? null : "top", title: id === "top" ? "Run my first marathon" : id }),
+  );
+
+  const app = bootApp({ storage: legacy });
+  assert.deepEqual(app.errors.map((e) => e.message), [], "legacy boot should not throw");
+  assert.equal(app.graphNodeCount(), 0, "legacy map renders no nodes (setup mode)");
+
+  const stored = app.window.localStorage.getItem(STORAGE_KEY);
+  assert.ok(stored, "legacy path must not removeItem the storage key (non-destructive)");
+});
+
+test("node with missing confidence never surfaces NaN (confidence ring)", () => {
+  // normalizeNode must coerce a missing/invalid confidence to a finite default
+  // (50), so the confidence ring text reads a real number, never "NaN" or
+  // "undefined".
+  const noConfidence = fullNode({ id: "top", parentId: null });
+  delete noConfidence.confidence;
+  const app = bootApp({ storage: [noConfidence] });
+
+  assert.deepEqual(app.errors.map((e) => e.message), [], "missing confidence must not throw");
+
+  const ringText = app.document.querySelector("#confidenceRingValue")?.textContent ?? "";
+  assert.ok(ringText.length > 0, "confidence ring should show a value");
+  assert.ok(!/NaN|undefined/.test(ringText), `confidence ring text must be a real number (got: ${JSON.stringify(ringText)})`);
+  assert.ok(/^\d+$/.test(ringText.trim()), `confidence ring text should be a number string (got: ${JSON.stringify(ringText)})`);
+});
+
+test("node title with HTML/script characters renders as inert text", () => {
+  // User-provided titles must be treated as text, never markup. A title that
+  // looks like a <script> tag must render via textContent: no injected element,
+  // and the node label text must equal the literal title.
+  const evilTitle = "<script>alert(1)</script> & <img> goal";
+  const app = bootApp({ storage: [fullNode({ id: "top", parentId: null, title: evilTitle })] });
+
+  assert.deepEqual(app.errors.map((e) => e.message), [], "boot should not throw on hostile title");
+
+  // The node label must carry the literal title as text, with no injected
+  // <script>/<img> elements created from it.
+  const label = app.document.querySelector(".graph-node .node-label");
+  assert.ok(label, "the node should render with a label");
+  assert.equal(label.textContent, evilTitle, "node label must equal the literal title text");
+
+  const map = app.document.querySelector("#achievementMap");
+  assert.equal(map.querySelectorAll("script").length, 0, "no <script> element should be injected");
+  assert.equal(map.querySelectorAll("img").length, 0, "no <img> element should be injected");
+
+  // Drive the search path too: querying the title must produce a result whose
+  // text equals the title (textContent-based), never injected markup.
+  const searchInput = app.document.querySelector("#nodeSearchInput");
+  searchInput.value = "goal";
+  searchInput.dispatchEvent(new app.window.Event("input", { bubbles: true }));
+
+  const results = app.document.querySelector("#searchResults");
+  assert.equal(results.querySelectorAll("script").length, 0, "search results must not inject <script>");
+  assert.equal(results.querySelectorAll("img").length, 0, "search results must not inject <img>");
+  const firstSpan = results.querySelector(".search-result span");
+  assert.ok(firstSpan, "a search result should appear");
+  assert.equal(firstSpan.textContent, evilTitle, "search result title span must be literal text");
+});

@@ -91,6 +91,49 @@ const activePointers = new Map();
 let completionTimer = null;
 let buzzTimer = null;
 
+// Cancel any pending celebration / buzz timeouts so they cannot fire onto a
+// freshly-reset graph state.
+function clearPendingTimers() {
+  clearTimeout(completionTimer);
+  clearTimeout(buzzTimer);
+  completionTimer = null;
+  buzzTimer = null;
+  if (completionToast) completionToast.classList.remove("is-visible");
+  if (graphShell) graphShell.classList.remove("is-celebrating");
+  if (feedbackLayer) feedbackLayer.classList.remove("is-buzzing");
+}
+
+function toText(value) {
+  return value == null ? "" : String(value);
+}
+
+// Guarantee a fully-shaped node so the rest of the app can read every field
+// (and call .trim()/.toLowerCase() on text) without defensive checks.
+// Note: defined as a function declaration (hoisted) and uses no module-level
+// `const` so it is safe to call from loadNodes() during top-level init.
+function normalizeNode(raw) {
+  const frictionLevels = ["Low", "Medium", "High"];
+  const source = raw && typeof raw === "object" ? raw : {};
+  const confidence = Number(source.confidence);
+  const node = {
+    id: source.id != null ? String(source.id) : makeId("node"),
+    parentId: source.parentId ?? null,
+    title: toText(source.title),
+    why: toText(source.why),
+    evidence: toText(source.evidence),
+    blocker: toText(source.blocker),
+    action: toText(source.action),
+    confidence: Number.isFinite(confidence) ? confidence : 50,
+    friction: frictionLevels.includes(source.friction) ? source.friction : "Medium",
+    done: Boolean(source.done),
+  };
+
+  if (Number.isFinite(source.x)) node.x = source.x;
+  if (Number.isFinite(source.y)) node.y = source.y;
+
+  return node;
+}
+
 function loadNodes() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return [];
@@ -98,11 +141,13 @@ function loadNodes() {
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
+    // Non-destructive: never wipe the user's stored data. The built-in legacy
+    // demo still boots into setup with an empty graph, but the storage key is
+    // left untouched so a real user's graph can never be silently deleted.
     if (isLegacyExampleMap(parsed)) {
-      localStorage.removeItem(STORAGE_KEY);
       return [];
     }
-    return parsed;
+    return parsed.map(normalizeNode);
   } catch {
     return [];
   }
@@ -173,8 +218,12 @@ function getParent(node) {
 function getDepth(node) {
   let depth = 0;
   let current = node;
+  const visited = new Set();
 
   while (current?.parentId) {
+    // Cycle guard: stop if we revisit a node, with an iteration cap backstop.
+    if (visited.has(current.id) || depth > nodes.length) break;
+    visited.add(current.id);
     current = getParent(current);
     depth += 1;
   }
@@ -184,9 +233,15 @@ function getDepth(node) {
 
 function isDescendant(candidateId, ancestorId) {
   let current = nodes.find((node) => node.id === candidateId);
+  const visited = new Set();
+  let iterations = 0;
 
   while (current?.parentId) {
     if (current.parentId === ancestorId) return true;
+    // Cycle guard: a detected loop is not a valid ancestor chain.
+    if (visited.has(current.id) || iterations > nodes.length) return false;
+    visited.add(current.id);
+    iterations += 1;
     current = nodes.find((node) => node.id === current.parentId);
   }
 
@@ -346,6 +401,7 @@ function renderGraph() {
 
   nodes.forEach((node) => {
     const position = positions.get(node.id);
+    if (!position) return;
     const button = template.content.firstElementChild.cloneNode(true);
     button.dataset.id = node.id;
     button.dataset.depth = String(position.depth);
@@ -547,6 +603,13 @@ function renderParentOptions(node) {
     });
 }
 
+function makeSpan(text, className) {
+  const span = document.createElement("span");
+  if (className) span.className = className;
+  span.textContent = text;
+  return span;
+}
+
 function createRelationChip(label, id) {
   const chip = document.createElement("button");
   chip.className = "relation-chip";
@@ -589,7 +652,8 @@ function renderReadiness(node) {
   checks.forEach((check) => {
     const item = document.createElement("div");
     item.className = `readiness-item ${check.met ? "is-met" : ""}`;
-    item.innerHTML = `<span>${check.label}</span><span class="readiness-mark">${check.met ? "OK" : "..."}</span>`;
+    item.append(makeSpan(check.label));
+    item.append(makeSpan(check.met ? "OK" : "...", "readiness-mark"));
     readinessList.append(item);
   });
 }
@@ -733,7 +797,8 @@ function renderSearchResults() {
   if (!matches.length) {
     const empty = document.createElement("div");
     empty.className = "search-result";
-    empty.innerHTML = "<span>No matching nodes</span><span>Try a goal, blocker, or next action</span>";
+    empty.append(makeSpan("No matching nodes"));
+    empty.append(makeSpan("Try a goal, blocker, or next action"));
     searchResults.append(empty);
     return;
   }
@@ -742,7 +807,11 @@ function renderSearchResults() {
     const result = document.createElement("button");
     result.className = "search-result";
     result.type = "button";
-    result.innerHTML = `<span>${node.title}</span><span>${getDepth(node) === 0 ? "Top achievement" : "Supporting achievement"} - ${node.confidence}% belief</span>`;
+    const role = getDepth(node) === 0 ? "Top achievement" : "Supporting achievement";
+    // textContent (via makeSpan) keeps user titles inert -- "<script>" renders
+    // as literal text, never as markup.
+    result.append(makeSpan(node.title));
+    result.append(makeSpan(`${role} - ${node.confidence}% belief`));
     result.addEventListener("click", () => selectNodeFromSearch(node.id));
     searchResults.append(result);
   });
@@ -772,32 +841,25 @@ function createInitialMap() {
     .filter(Boolean);
 
   nodes = [
-    {
+    normalizeNode({
       id: topId,
       parentId: null,
       title,
-      why: "",
-      blocker: "",
       confidence: 65,
       friction: "Medium",
-      evidence: "",
-      action: "",
-      done: false,
-    },
-    ...prereqs.map((prereq) => ({
-      id: makeId("support"),
-      parentId: topId,
-      title: prereq,
-      why: "",
-      blocker: "",
-      confidence: 55,
-      friction: "Medium",
-      evidence: "",
-      action: "",
-      done: false,
-    })),
+    }),
+    ...prereqs.map((prereq) =>
+      normalizeNode({
+        id: makeId("support"),
+        parentId: topId,
+        title: prereq,
+        confidence: 55,
+        friction: "Medium",
+      }),
+    ),
   ];
 
+  clearPendingTimers();
   selectedId = topId;
   setupOpen = false;
   ritualCollapsed = true;
@@ -812,6 +874,7 @@ function createInitialMap() {
 }
 
 function openNewMap() {
+  clearPendingTimers();
   setupOpen = true;
   ritualCollapsed = true;
   selectedId = null;
@@ -868,20 +931,17 @@ function createPlacedAchievement(clientX, clientY) {
   const parent = getSelected();
   const id = makeId("support");
 
-  nodes.push({
-    id,
-    parentId: parent?.id || null,
-    title: "New achievement",
-    why: "",
-    blocker: "",
-    confidence: 50,
-    friction: "Medium",
-    evidence: "",
-    action: "",
-    done: false,
-    x: point.x,
-    y: point.y,
-  });
+  nodes.push(
+    normalizeNode({
+      id,
+      parentId: parent?.id || null,
+      title: "New achievement",
+      confidence: 50,
+      friction: "Medium",
+      x: point.x,
+      y: point.y,
+    }),
+  );
 
   selectedId = id;
   placementMode = false;
@@ -912,7 +972,7 @@ function connectSelectedTo(parentId) {
     return;
   }
 
-  node.parentId = parentId;
+  node.parentId = parentId || null;
   selectedId = node.id;
   connectFromId = null;
   placementMode = false;
@@ -924,7 +984,13 @@ function connectSelectedTo(parentId) {
 
 function updateParent(parentId) {
   const node = getSelected();
-  if (!node || !canConnectToParent(node.id, parentId)) return;
+  if (!node) return;
+  if (!canConnectToParent(node.id, parentId)) {
+    // Re-sync the <select> so it does not show a rejected value while the
+    // model keeps the old parent.
+    renderInspector();
+    return;
+  }
 
   node.parentId = parentId || null;
   save();
@@ -940,19 +1006,18 @@ function makeSelectedSmaller() {
   const blocker = node.blocker.trim();
   const title = blocker ? `Remove blocker: ${blocker}` : `Make "${node.title}" easier`;
   const id = makeId("support");
-  nodes.push({
-    id,
-    parentId: node.id,
-    title,
-    why: `This makes "${node.title}" more believable.`,
-    blocker: "",
-    confidence: 70,
-    friction: "Low",
-    evidence: "",
-    action: "Define the smallest version I can do next.",
-    done: false,
-  });
-  node.confidence = Math.max(Number(node.confidence), 65);
+  nodes.push(
+    normalizeNode({
+      id,
+      parentId: node.id,
+      title,
+      why: `This makes "${node.title}" more believable.`,
+      confidence: 70,
+      friction: "Low",
+      action: "Define the smallest version I can do next.",
+    }),
+  );
+  node.confidence = Math.max(Number(node.confidence) || 0, 65);
   selectedId = id;
   inspector.classList.add("is-open");
   inspector.classList.remove("is-editing");
@@ -965,6 +1030,7 @@ function deleteSelected() {
   const node = getSelected();
   if (!node) return;
 
+  clearPendingTimers();
   const toDelete = new Set([node.id]);
   const fallbackId = node.parentId;
   let changed = true;
@@ -1151,9 +1217,33 @@ graphCanvas.addEventListener("pointermove", (event) => {
 
 graphCanvas.addEventListener("pointerup", (event) => {
   activePointers.delete(event.pointerId);
-  view.isPanning = false;
-  graphCanvas.classList.remove("is-panning");
-  graphCanvas.releasePointerCapture(event.pointerId);
+
+  if (activePointers.size >= 2) {
+    // Still pinching with the remaining fingers; keep pinch state intact.
+  } else {
+    // Dropped below a pinch: clear pinch state. If a single finger remains,
+    // re-prime panning from it so the surviving pointer keeps working.
+    view.pinchStartDistance = 0;
+    view.pinchStartScale = view.scale;
+
+    const [survivor] = activePointers.values();
+    if (survivor) {
+      view.isPanning = true;
+      view.panStartX = survivor.x;
+      view.panStartY = survivor.y;
+      view.startX = view.x;
+      view.startY = view.y;
+    } else {
+      view.isPanning = false;
+      graphCanvas.classList.remove("is-panning");
+    }
+  }
+
+  // releasePointerCapture throws if the pointer was never captured or was
+  // already cancelled; only release what we actually hold.
+  if (graphCanvas.hasPointerCapture?.(event.pointerId)) {
+    graphCanvas.releasePointerCapture(event.pointerId);
+  }
 });
 
 graphCanvas.addEventListener("pointercancel", () => {
