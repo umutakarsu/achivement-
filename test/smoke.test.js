@@ -435,3 +435,35 @@ test("keyboard shortcuts are ignored when focus is on a button", () => {
     "the / shortcut must not steal focus while a button is focused",
   );
 });
+
+test("link layer shares the nodes' coordinate space and keeps crisp strokes", () => {
+  // The dependency lines (SVG <line> in #linkLayer, a 0-100 viewBox) and the
+  // nodes (absolutely positioned with left/top percentages) must share ONE
+  // coordinate space, otherwise a line endpoint at SVG (x,y) does not land at
+  // x%/y% of the rectangle and the lines drift away from the node centers.
+  //
+  // The fix is preserveAspectRatio="none" so the viewBox stretches to fill the
+  // (non-square) rectangle, plus vector-effect="non-scaling-stroke" on each
+  // line so the resulting non-uniform scale does not distort stroke width.
+  const app = bootApp({ storage: validGraph() });
+  assert.deepEqual(app.errors.map((e) => e.message), [], "boot should not throw");
+
+  const linkLayer = app.document.querySelector("#linkLayer");
+  assert.ok(linkLayer, "the #linkLayer SVG should exist");
+  assert.equal(
+    linkLayer.getAttribute("preserveAspectRatio"),
+    "none",
+    "#linkLayer must use preserveAspectRatio=none so its viewBox matches node percentages",
+  );
+
+  // validGraph() has two children of the top node => two parent/child links.
+  const lines = linkLayer.querySelectorAll("line");
+  assert.equal(lines.length, 2, "both dependency links should render as <line> elements");
+  lines.forEach((line) => {
+    assert.equal(
+      line.getAttribute("vector-effect"),
+      "non-scaling-stroke",
+      "each link <line> must carry vector-effect=non-scaling-stroke to stay crisp under the stretched viewBox",
+    );
+  });
+});

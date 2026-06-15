@@ -474,6 +474,12 @@ function renderGraph() {
     line.setAttribute("y1", start.y);
     line.setAttribute("x2", end.x);
     line.setAttribute("y2", end.y);
+    // With preserveAspectRatio="none" the 0-100 viewBox stretches to fill the
+    // (non-square) rectangle so SVG x/y match the nodes' left/top percentages.
+    // That non-uniform scale would also distort stroke width (thicker
+    // horizontally than vertically); non-scaling-stroke keeps it uniform/crisp
+    // by interpreting stroke-width in pixels (see .graph-link rules in CSS).
+    line.setAttribute("vector-effect", "non-scaling-stroke");
     line.dataset.parentId = node.parentId;
     line.dataset.childId = node.id;
     line.classList.add("graph-link");
