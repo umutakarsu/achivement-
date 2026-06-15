@@ -1266,7 +1266,8 @@ function deleteSelected() {
   nodes = nodes.filter((candidate) => !toDelete.has(candidate.id));
   selectedId = fallbackId && nodes.some((candidate) => candidate.id === fallbackId) ? fallbackId : null;
 
-  if (!nodes.length) {
+  const emptiedGraph = !nodes.length;
+  if (emptiedGraph) {
     setupOpen = true;
     placementMode = false;
     connectFromId = null;
@@ -1282,6 +1283,14 @@ function deleteSelected() {
   save();
   buzz("delete");
   render();
+
+  // Deleting the last node re-opens the setup dialog (a true modal). Match every
+  // other setup-open path and move focus into it, otherwise keyboard/AT focus is
+  // stranded on <body> behind the modal.
+  if (emptiedGraph) {
+    setupReturnFocusEl = null;
+    setupGoalInput.focus();
+  }
 }
 
 Object.entries(inputs).forEach(([key, input]) => {

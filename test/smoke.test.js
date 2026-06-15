@@ -343,6 +343,42 @@ test("Cancel control clears an active placement mode", () => {
   );
 });
 
+test("deleting the last node re-opens setup and moves focus into the dialog", () => {
+  // Deleting the only node empties the graph and re-opens the setup dialog (a
+  // true modal: role=dialog, aria-modal=true). Focus MUST move into the dialog
+  // (the goal input) to match every other setup-open path; otherwise keyboard /
+  // assistive-tech focus is stranded on <body> behind the modal.
+  const app = bootApp({
+    storage: [
+      fullNode({ id: "only", parentId: null, title: "The single top achievement here" }),
+    ],
+  });
+
+  // Select the single node, then delete it -> empties the graph.
+  const node = app.document.querySelector(".graph-node");
+  node.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  app.document.querySelector("#deleteButton").dispatchEvent(
+    new app.window.MouseEvent("click", { bubbles: true }),
+  );
+
+  assert.deepEqual(app.errors.map((e) => e.message), [], "deleting the last node must not throw");
+  assert.equal(app.graphNodeCount(), 0, "the graph should be empty after deleting the only node");
+
+  const setupPanel = app.document.querySelector("#setupPanel");
+  assert.equal(
+    setupPanel.classList.contains("is-hidden"),
+    false,
+    "setup dialog should re-open when the graph is emptied",
+  );
+
+  const goalInput = app.document.querySelector("#setupGoalInput");
+  assert.equal(
+    app.document.activeElement,
+    goalInput,
+    "focus should move into the re-opened setup dialog (#setupGoalInput), not stay on <body>",
+  );
+});
+
 test("focus toggle buttons expose aria-pressed reflecting focus mode", () => {
   const app = bootApp({ storage: validGraph() });
   const focusButton = app.document.querySelector("#focusButton");
