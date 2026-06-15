@@ -9,9 +9,18 @@
   <body>
     <main class="graph-shell">
       <header class="top-chrome" aria-label="Graph toolbar">
-        <div class="history-controls" aria-hidden="true">
-          <span>&lt;</span>
-          <span>&gt;</span>
+        <div class="toolbar-lead">
+          <button
+            id="shortcutsButton"
+            class="shortcuts-button"
+            type="button"
+            aria-label="Show keyboard shortcuts"
+            aria-expanded="false"
+            aria-controls="shortcutsPanel"
+            data-tip="Keyboard shortcuts"
+          >
+            ?
+          </button>
         </div>
         <h1>Achievement Graph</h1>
         <div class="toolbar-actions">
@@ -19,10 +28,34 @@
         </div>
       </header>
 
+      <div
+        id="shortcutsPanel"
+        class="shortcuts-panel is-hidden"
+        role="dialog"
+        aria-label="Keyboard shortcuts"
+        hidden
+      >
+        <strong>Keyboard shortcuts</strong>
+        <ul>
+          <li><kbd>/</kbd> Find a node</li>
+          <li><kbd>+</kbd> / <kbd>-</kbd> Zoom in / out</li>
+          <li><kbd>0</kbd> Reset view</li>
+          <li><kbd>f</kbd> Toggle local focus</li>
+          <li><kbd>Esc</kbd> Cancel / close</li>
+        </ul>
+      </div>
+
       <section class="achievement-map" aria-label="Achievement graph">
         <svg id="linkLayer" class="link-layer" viewBox="0 0 100 100" aria-hidden="true"></svg>
         <div id="achievementMap" class="graph-nodes" aria-label="Achievement nodes"></div>
+        <p id="emptyCanvasMessage" class="empty-canvas-message is-hidden" aria-hidden="true">
+          No graph yet. Create your first achievement graph to begin.
+        </p>
       </section>
+
+      <div class="mode-cancel" id="modeCancel" hidden>
+        <button id="modeCancelButton" type="button" aria-label="Cancel current mode">Cancel</button>
+      </div>
 
       <aside class="graph-status" aria-label="Graph status">
         <span id="modeLabel">Global graph</span>
@@ -47,8 +80,15 @@
       </section>
 
       <section class="focus-tray" id="focusTray" aria-label="Recommended next move">
-        <div class="focus-progress" aria-hidden="true">
-          <span id="focusProgressBar"></span>
+        <div class="focus-progress">
+          <span
+            id="focusProgressBar"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            aria-label="Path progress"
+          ></span>
         </div>
         <div class="focus-kicker">
           <span class="eyebrow">Today</span>
@@ -75,13 +115,20 @@
         <button id="zoomInButton" type="button" aria-label="Zoom in" data-tip="Zoom in">+</button>
         <button id="zoomOutButton" type="button" aria-label="Zoom out" data-tip="Zoom out">-</button>
         <button id="fitButton" type="button" aria-label="Fit graph" data-tip="Reset view">Fit</button>
-        <button id="focusButton" type="button" aria-label="Toggle local graph focus" data-tip="Local graph">
+        <button
+          id="focusButton"
+          type="button"
+          aria-label="Local focus: off"
+          aria-pressed="false"
+          data-tip="Local graph"
+        >
           Local
         </button>
         <button
           id="inspectorToggle"
           type="button"
           aria-label="Toggle selected achievement editor"
+          aria-pressed="false"
           data-tip="Edit node"
         >
           Edit
@@ -99,12 +146,18 @@
         </button>
       </nav>
 
-      <section class="setup-panel" id="setupPanel" aria-label="Create achievement map">
+      <section
+        class="setup-panel"
+        id="setupPanel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="setupHeading"
+      >
         <div class="setup-card">
           <header class="setup-card-header">
             <div>
               <p class="eyebrow">Start with the peak</p>
-              <h2>What is the achievement you want at the top?</h2>
+              <h2 id="setupHeading">What is the achievement you want at the top?</h2>
             </div>
             <button id="closeSetupButton" class="setup-close-button" type="button" aria-label="Close new map panel">
               x
@@ -138,7 +191,7 @@
         </div>
       </section>
 
-      <aside class="inspector" id="inspector" aria-label="Selected achievement editor">
+      <aside class="inspector" id="inspector" role="region" aria-label="Selected achievement editor">
         <header class="inspector-header">
           <div>
             <span class="eyebrow">Achievement</span>
@@ -155,7 +208,12 @@
               <h2 id="previewTitle"></h2>
               <span id="previewMeta"></span>
             </div>
-            <div class="confidence-ring" id="confidenceRing" aria-label="Confidence score">
+            <div
+              class="confidence-ring"
+              id="confidenceRing"
+              role="img"
+              aria-label="Confidence score 75 percent"
+            >
               <span id="confidenceRingValue">75</span>
               <em>Conf</em>
             </div>
@@ -165,7 +223,14 @@
             <span id="previewClearPill" class="preview-pill">6 of 6 clear</span>
           </div>
           <div class="preview-readiness" aria-label="Readiness score">
-            <span id="previewReadinessBar"></span>
+            <span
+              id="previewReadinessBar"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+              aria-label="Readiness"
+            ></span>
           </div>
           <p id="previewWhy" class="preview-why"></p>
 
@@ -185,7 +250,15 @@
           <div class="local-depth-control">
             <label>
               Local depth
-              <input id="localDepthInput" type="range" min="1" max="3" step="1" value="1" />
+              <input
+                id="localDepthInput"
+                type="range"
+                min="1"
+                max="3"
+                step="1"
+                value="1"
+                aria-valuetext="1 step"
+              />
             </label>
             <span id="localDepthLabel">1 step</span>
           </div>
@@ -193,8 +266,10 @@
           <div class="preview-actions">
             <button id="previewDoneButton" class="primary-preview-action" type="button">Done</button>
             <button id="editDetailsButton" type="button">Edit</button>
-            <button id="linkNodeButton" type="button">Link</button>
-            <button id="globalViewButton" type="button">Local</button>
+            <button id="linkNodeButton" type="button" aria-pressed="false">Link</button>
+            <button id="globalViewButton" type="button" aria-label="Local focus: off" aria-pressed="false">
+              Local
+            </button>
           </div>
         </section>
 
@@ -245,7 +320,14 @@
           <div class="field-grid">
             <label>
               Confidence
-              <input id="confidenceInput" type="range" min="0" max="100" step="5" />
+              <input
+                id="confidenceInput"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                aria-valuetext="50 percent"
+              />
               <span id="confidenceValue"></span>
             </label>
             <label>

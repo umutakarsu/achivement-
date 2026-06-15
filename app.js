@@ -11,6 +11,18 @@ const setupPanel = document.querySelector("#setupPanel");
 const closeSetupButton = document.querySelector("#closeSetupButton");
 const setupGoalInput = document.querySelector("#setupGoalInput");
 const setupPrereqInput = document.querySelector("#setupPrereqInput");
+const newMapButton = document.querySelector("#newMapButton");
+const emptyCanvasMessage = document.querySelector("#emptyCanvasMessage");
+const modeCancel = document.querySelector("#modeCancel");
+const modeCancelButton = document.querySelector("#modeCancelButton");
+const shortcutsButton = document.querySelector("#shortcutsButton");
+const shortcutsPanel = document.querySelector("#shortcutsPanel");
+
+// Element to restore focus to when a transient surface (setup dialog /
+// inspector) closes. For the setup dialog this is the control that opened it;
+// for the inspector it is the node button that was selected.
+let setupReturnFocusEl = null;
+let inspectorReturnFocusEl = null;
 const graphShell = document.querySelector(".graph-shell");
 const graphCanvas = document.querySelector(".achievement-map");
 const mapEl = document.querySelector("#achievementMap");
@@ -101,6 +113,81 @@ function clearPendingTimers() {
   if (completionToast) completionToast.classList.remove("is-visible");
   if (graphShell) graphShell.classList.remove("is-celebrating");
   if (feedbackLayer) feedbackLayer.classList.remove("is-buzzing");
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// Collect the focusable controls inside a container, in DOM order, skipping any
+// that are hidden/disabled. Used by the setup dialog focus trap.
+function getFocusable(container) {
+  if (!container) return [];
+  const selector =
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  return [...container.querySelectorAll(selector)].filter((el) => {
+    if (el.hidden) return false;
+    if (el.getAttribute("aria-hidden") === "true") return false;
+    // offsetParent is null for display:none in real browsers; jsdom returns
+    // null for everything, so fall back to not filtering there.
+    return true;
+  });
+}
+
+// Keep Tab/Shift+Tab inside the setup dialog while it is the active modal.
+function handleSetupTrap(event) {
+  if (event.key !== "Tab") return;
+  if (!setupOpen) return;
+  const focusable = getFocusable(setupPanel);
+  if (!focusable.length) return;
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+
+  if (event.shiftKey) {
+    if (active === first || !setupPanel.contains(active)) {
+      event.preventDefault();
+      last.focus();
+    }
+  } else if (active === last || !setupPanel.contains(active)) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function safeFocus(el) {
+  if (el && typeof el.focus === "function" && el.isConnected) {
+    el.focus();
+  }
+}
+
+// Move focus into the inspector (a side panel, not a modal) to a sensible first
+// control: the close button.
+function focusInspector() {
+  if (!inspector.classList.contains("is-open")) return;
+  const target = document.querySelector("#closeInspectorButton");
+  safeFocus(target);
+}
+
+function openShortcuts() {
+  if (!shortcutsPanel) return;
+  shortcutsPanel.hidden = false;
+  shortcutsPanel.classList.remove("is-hidden");
+  shortcutsButton.setAttribute("aria-expanded", "true");
+}
+
+function closeShortcuts() {
+  if (!shortcutsPanel) return;
+  shortcutsPanel.hidden = true;
+  shortcutsPanel.classList.add("is-hidden");
+  shortcutsButton.setAttribute("aria-expanded", "false");
+}
+
+function toggleShortcuts() {
+  if (!shortcutsPanel) return;
+  if (shortcutsPanel.hidden) openShortcuts();
+  else closeShortcuts();
 }
 
 function toText(value) {
@@ -463,6 +550,8 @@ function renderFocusTray() {
   const isComplete = done === nodes.length;
 
   focusProgressBar.style.width = `${progress}%`;
+  focusProgressBar.setAttribute("aria-valuenow", String(progress));
+  focusProgressBar.setAttribute("aria-valuetext", `${progress} percent complete`);
   focusProgressText.textContent = `${progress}% complete`;
   focusNodeTitle.textContent = isComplete ? "Path complete" : next?.title || "Choose the next move";
   focusNodeWhy.textContent = isComplete
@@ -491,7 +580,9 @@ function showCompletion(node) {
     : "Every visible move is complete. Take a second to notice the promise you kept.";
   completionNextButton.hidden = !next || next.id === node.id;
   completionToast.classList.add("is-visible");
-  graphShell.classList.add("is-celebrating");
+  if (!prefersReducedMotion()) {
+    graphShell.classList.add("is-celebrating");
+  }
 
   completionTimer = setTimeout(() => {
     completionToast.classList.remove("is-visible");
@@ -502,6 +593,22 @@ function showCompletion(node) {
 function renderSetup() {
   setupPanel.classList.toggle("is-hidden", !setupOpen);
   setupPanel.classList.toggle("can-close", nodes.length > 0);
+
+  // On first run (no graph yet) the close "x" silently does nothing, so hide
+  // and disable it; re-enable once a graph exists.
+  const canClose = nodes.length > 0;
+  closeSetupButton.disabled = !canClose;
+  closeSetupButton.hidden = !canClose;
+  closeSetupButton.setAttribute("aria-hidden", canClose ? "false" : "true");
+
+  // Empty-canvas hint so a brand-new user understands the single path: create a
+  // graph. Only meaningful when the canvas is genuinely empty and not covered
+  // by the dialog (after a delete).
+  if (emptyCanvasMessage) {
+    const showEmpty = nodes.length === 0 && !setupOpen;
+    emptyCanvasMessage.classList.toggle("is-hidden", !showEmpty);
+    emptyCanvasMessage.setAttribute("aria-hidden", showEmpty ? "false" : "true");
+  }
 }
 
 function renderInspector() {
@@ -525,6 +632,8 @@ function renderInspector() {
   inputs.confidence.value = node.confidence;
   inputs.friction.value = node.friction;
   confidenceValue.textContent = `${node.confidence}%`;
+  inputs.confidence.setAttribute("aria-valuetext", `${node.confidence} percent`);
+  syncInspectorToggleState();
   ifThenPreview.textContent = buildIfThen(node);
   renderReadiness(node);
   renderSuggestion(node);
@@ -547,9 +656,14 @@ function renderPreview(node) {
   previewStatusPill.textContent = node.done ? "Done" : "Open";
   previewStatusPill.classList.toggle("is-done", Boolean(node.done));
   previewClearPill.textContent = `${met} of ${checks.length} clear`;
-  confidenceRing.style.setProperty("--confidence", `${Number(node.confidence || 0)}%`);
+  const confidencePct = Number(node.confidence || 0);
+  confidenceRing.style.setProperty("--confidence", `${confidencePct}%`);
   confidenceRingValue.textContent = String(node.confidence);
-  previewReadinessBar.style.width = `${Math.round((met / checks.length) * 100)}%`;
+  confidenceRing.setAttribute("aria-label", `Confidence score ${node.confidence} percent`);
+  const readinessPct = Math.round((met / checks.length) * 100);
+  previewReadinessBar.style.width = `${readinessPct}%`;
+  previewReadinessBar.setAttribute("aria-valuenow", String(readinessPct));
+  previewReadinessBar.setAttribute("aria-valuetext", `${met} of ${checks.length} clear`);
   previewWhy.textContent = node.why.trim() || "Add why this achievement matters so the node has emotional pull.";
   previewAction.textContent = node.action.trim() || "Define the smallest visible action.";
 
@@ -575,10 +689,19 @@ function renderPreview(node) {
   }
 
   localDepthInput.value = String(view.localDepth);
-  localDepthLabel.textContent = `${view.localDepth} ${view.localDepth === 1 ? "step" : "steps"}`;
+  const depthText = `${view.localDepth} ${view.localDepth === 1 ? "step" : "steps"}`;
+  localDepthLabel.textContent = depthText;
+  localDepthInput.setAttribute("aria-valuetext", depthText);
   document.querySelector("#previewDoneButton").textContent = node.done ? "Reopen" : "Done";
-  document.querySelector("#linkNodeButton").textContent = connectFromId === node.id ? "Pick..." : "Link";
-  document.querySelector("#globalViewButton").textContent = view.focusMode ? "All" : "Local";
+  const linkButton = document.querySelector("#linkNodeButton");
+  const isLinkingThis = connectFromId === node.id;
+  linkButton.textContent = isLinkingThis ? "Pick..." : "Link";
+  linkButton.setAttribute("aria-pressed", isLinkingThis ? "true" : "false");
+  const globalViewButton = document.querySelector("#globalViewButton");
+  globalViewButton.textContent = view.focusMode ? "All" : "Local";
+  globalViewButton.setAttribute("aria-pressed", view.focusMode ? "true" : "false");
+  globalViewButton.setAttribute("aria-label", view.focusMode ? "Local focus: on" : "Local focus: off");
+  syncFocusButtonState();
   inspectorPath.textContent =
     getDepth(node) === 0
       ? `Top achievement, ${contextCount}`
@@ -659,6 +782,11 @@ function renderReadiness(node) {
 }
 
 function selectNode(id, options = {}) {
+  // Remember the node button that currently holds focus (if any) so the
+  // inspector can restore focus to it on close.
+  const activeNodeButton = document.activeElement?.closest?.(".graph-node");
+  if (activeNodeButton) inspectorReturnFocusEl = activeNodeButton;
+
   selectedId = id;
   ritualCollapsed = true;
   placementMode = false;
@@ -668,6 +796,13 @@ function selectNode(id, options = {}) {
   inspector.classList.toggle("is-editing", Boolean(options.editing));
   if (!options.silent) buzz("select", options.event);
   render();
+
+  // Only move focus into the inspector for explicit/keyboard-driven opens
+  // (search, next-node, keyboard). Raw pointer clicks must NOT steal focus, so
+  // rapid node clicking keeps working.
+  if (options.moveFocus) {
+    focusInspector();
+  }
 }
 
 function handleNodeClick(id, event) {
@@ -685,12 +820,27 @@ function selectNodeFromSearch(id) {
   nodeSearchInput.value = "";
   nodeSearch.classList.remove("is-open");
   searchResults.innerHTML = "";
-  selectNode(id);
+  selectNode(id, { moveFocus: true });
   centerNode(id);
 }
 
 function clampScale(scale) {
   return Math.max(0.45, Math.min(2.8, scale));
+}
+
+// Reflect focus-mode state on both controls that toggle it (right-rail
+// #focusButton and inspector #globalViewButton) for assistive tech.
+function syncFocusButtonState() {
+  focusButton.setAttribute("aria-pressed", view.focusMode ? "true" : "false");
+  focusButton.setAttribute("aria-label", view.focusMode ? "Local focus: on" : "Local focus: off");
+}
+
+// Reflect the inspector edit toggle's pressed state.
+function syncInspectorToggleState() {
+  const toggle = document.querySelector("#inspectorToggle");
+  if (toggle) {
+    toggle.setAttribute("aria-pressed", inspector.classList.contains("is-editing") ? "true" : "false");
+  }
 }
 
 function applyViewTransform() {
@@ -699,11 +849,35 @@ function applyViewTransform() {
   linkLayer.style.transform = transform;
   zoomLabel.textContent = `${Math.round(view.scale * 100)}%`;
   focusButton.classList.toggle("is-active", view.focusMode);
+  syncFocusButtonState();
   graphShell.classList.toggle("is-zoomed-out", view.scale < 0.72);
   graphShell.classList.toggle("is-focus-mode", view.focusMode);
   graphShell.classList.toggle("has-selection", Boolean(selectedId));
   graphShell.classList.toggle("is-placing", placementMode);
   graphShell.classList.toggle("is-linking", Boolean(connectFromId));
+  renderModeCancel();
+}
+
+// Show a visible, tappable Cancel control whenever a transient mode (placement
+// or link) is active. Escape works too, but is impossible on touch.
+function renderModeCancel() {
+  if (!modeCancel) return;
+  const active = placementMode || Boolean(connectFromId);
+  modeCancel.hidden = !active;
+  if (active && modeCancelButton) {
+    modeCancelButton.setAttribute(
+      "aria-label",
+      placementMode ? "Cancel placing a new achievement" : "Cancel linking achievements",
+    );
+  }
+}
+
+function cancelTransientMode() {
+  if (!placementMode && !connectFromId) return;
+  placementMode = false;
+  connectFromId = null;
+  buzz("soft");
+  render();
 }
 
 function zoomAt(clientX, clientY, nextScale) {
@@ -754,6 +928,7 @@ function centerNode(id) {
 }
 
 function clearSelection() {
+  const priorNodeId = selectedId;
   selectedId = null;
   placementMode = false;
   connectFromId = null;
@@ -761,6 +936,15 @@ function clearSelection() {
   inspector.classList.remove("is-open");
   inspector.classList.remove("is-editing");
   render();
+
+  // Restore focus to a sensible element: the previously focused node button if
+  // it still exists, else #newMapButton.
+  const tracked = inspectorReturnFocusEl;
+  inspectorReturnFocusEl = null;
+  const nodeButton =
+    (tracked && tracked.isConnected && tracked) ||
+    (priorNodeId && mapEl.querySelector(`.graph-node[data-id="${priorNodeId}"]`));
+  safeFocus(nodeButton || newMapButton);
 }
 
 function getPointerMetrics() {
@@ -778,7 +962,7 @@ function getPointerMetrics() {
 function selectNextUnclearNode(event = null) {
   const next = getNextUnclearNode();
   if (!next) return;
-  selectNode(next.id, { event });
+  selectNode(next.id, { event, moveFocus: true });
   centerNode(next.id);
 }
 
@@ -871,10 +1055,19 @@ function createInitialMap() {
   save();
   buzz("create");
   render();
+  // The setup dialog closed and the inspector opened on the new top node; move
+  // focus into the inspector rather than leaving it on the now-hidden dialog.
+  setupReturnFocusEl = null;
+  focusInspector();
 }
 
 function openNewMap() {
   clearPendingTimers();
+  // Remember where focus should return to when the dialog closes. Prefer the
+  // active control (e.g. #newMapButton) and fall back to that button.
+  const opener = document.activeElement;
+  setupReturnFocusEl =
+    opener && opener !== document.body && opener.isConnected ? opener : newMapButton;
   setupOpen = true;
   ritualCollapsed = true;
   selectedId = null;
@@ -898,11 +1091,22 @@ function closeSetup() {
   setupGoalInput.value = "";
   setupPrereqInput.value = "";
   render();
+  // Return focus to whatever opened the dialog (defaults to #newMapButton).
+  safeFocus(setupReturnFocusEl || newMapButton);
+  setupReturnFocusEl = null;
 }
 
 function addSupportingAchievement() {
   if (!nodes.length) {
     openNewMap();
+    return;
+  }
+
+  // Re-tapping the originating button toggles placement mode off.
+  if (placementMode) {
+    placementMode = false;
+    buzz("soft");
+    render();
     return;
   }
 
@@ -956,6 +1160,14 @@ function createPlacedAchievement(clientX, clientY) {
 function startLinkMode() {
   const node = getSelected();
   if (!node) return;
+
+  // Re-tapping Link while already linking from this node toggles link mode off.
+  if (connectFromId === node.id) {
+    connectFromId = null;
+    buzz("soft");
+    render();
+    return;
+  }
 
   placementMode = false;
   connectFromId = node.id;
@@ -1084,11 +1296,21 @@ document.querySelector("#newMapButton").addEventListener("click", (event) => {
   openNewMap();
 });
 closeSetupButton.addEventListener("click", closeSetup);
+if (modeCancelButton) {
+  modeCancelButton.addEventListener("click", cancelTransientMode);
+}
+if (shortcutsButton) {
+  shortcutsButton.addEventListener("click", (event) => {
+    buzz("soft", event);
+    toggleShortcuts();
+  });
+}
 document.querySelector("#inspectorToggle").addEventListener("click", () => {
   if (!nodes.length) return;
   buzz("soft");
   inspector.classList.add("is-open");
   inspector.classList.toggle("is-editing");
+  syncInspectorToggleState();
 });
 document.querySelector("#closeInspectorButton").addEventListener("click", () => {
   buzz("soft");
@@ -1123,6 +1345,7 @@ localDepthInput.addEventListener("input", () => {
 document.querySelector("#editDetailsButton").addEventListener("click", () => {
   buzz("soft");
   inspector.classList.add("is-editing");
+  syncInspectorToggleState();
   inputs.title.focus();
 });
 document.querySelector("#linkNodeButton").addEventListener("click", startLinkMode);
@@ -1253,7 +1476,14 @@ graphCanvas.addEventListener("pointercancel", () => {
 });
 
 document.addEventListener("keydown", (event) => {
+  // Keep the setup dialog a true modal: trap Tab focus while it is open.
+  if (setupOpen) handleSetupTrap(event);
+
   if (event.key === "Escape") {
+    if (shortcutsPanel && !shortcutsPanel.hidden) {
+      closeShortcuts();
+      return;
+    }
     if (placementMode || connectFromId) {
       placementMode = false;
       connectFromId = null;
@@ -1270,7 +1500,15 @@ document.addEventListener("keydown", (event) => {
     clearSelection();
     return;
   }
-  if (event.target.matches("input, textarea, select")) return;
+  // Single-key shortcuts must not fire while typing in a field, while focus is
+  // on an interactive control (button/contenteditable), or when a modifier is
+  // held (so browser/OS chords like Ctrl+- keep working). Escape is handled
+  // above and stays available everywhere.
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  const target = event.target;
+  if (target.matches?.("input, textarea, select, button, [contenteditable], [contenteditable='true']")) {
+    return;
+  }
   if (event.key === "/") {
     event.preventDefault();
     nodeSearchInput.focus();
@@ -1288,3 +1526,11 @@ function render() {
 }
 
 render();
+
+// First-run focus: the setup dialog is open on a brand-new app with no graph.
+// Move focus to the goal input; restore target is the document body (there is
+// no opener button on first run).
+if (setupOpen) {
+  setupReturnFocusEl = document.body;
+  setupGoalInput.focus();
+}

@@ -660,15 +660,6 @@ button {
   text-align: center;
 }
 
-.history-controls {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  color: #606060;
-  font-size: 1.9rem;
-  line-height: 1;
-}
-
 .toolbar-actions {
   justify-self: end;
   display: flex;
@@ -1843,11 +1834,6 @@ input[type="range"] {
     font-size: 0.98rem;
   }
 
-  .history-controls {
-    gap: 0.5rem;
-    font-size: 1.35rem;
-  }
-
   .toolbar-actions {
     gap: 0.1rem;
   }
@@ -2424,4 +2410,144 @@ input[type="range"] {
   .preview-actions {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* Additive a11y/UX components: mode-cancel chip, empty-state, shortcuts.
+   Reuse the existing dark-pill / glass-card visual language without altering
+   any existing rule values. */
+.toolbar-lead {
+  justify-self: start;
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.shortcuts-button {
+  display: grid;
+  width: 1.95rem;
+  height: 1.95rem;
+  place-items: center;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: #515154;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.shortcuts-button:hover,
+.shortcuts-button:focus-visible {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1d1d1f;
+}
+
+.shortcuts-panel {
+  position: absolute;
+  top: 3.4rem;
+  left: 0.9rem;
+  z-index: 9;
+  display: grid;
+  gap: 0.45rem;
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 18px;
+  background: rgba(250, 250, 252, 0.82);
+  box-shadow: 0 28px 64px -20px rgba(0, 0, 0, 0.55);
+  color: #1d1d1f;
+  font-size: 0.82rem;
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+}
+
+.shortcuts-panel.is-hidden {
+  display: none;
+}
+
+.shortcuts-panel strong {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.shortcuts-panel ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #515154;
+}
+
+.shortcuts-panel kbd {
+  display: inline-block;
+  min-width: 1.1rem;
+  padding: 0.1rem 0.32rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.6);
+  color: #1d1d1f;
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.empty-canvas-message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  width: max-content;
+  max-width: calc(100vw - 3rem);
+  margin: 0;
+  color: #86868b;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.empty-canvas-message.is-hidden {
+  display: none;
+}
+
+.mode-cancel {
+  position: absolute;
+  left: 50%;
+  bottom: 3.6rem;
+  z-index: 9;
+  display: block;
+  transform: translateX(-50%);
+}
+
+.mode-cancel[hidden] {
+  display: none;
+}
+
+.mode-cancel button {
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(46, 46, 46, 0.92), rgba(24, 24, 24, 0.88)),
+    rgba(24, 24, 24, 0.88);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.38);
+  color: #eeeeee;
+  font-size: 0.78rem;
+  font-weight: 640;
+  line-height: 1;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.mode-cancel button:hover,
+.mode-cancel button:focus-visible {
+  background:
+    linear-gradient(180deg, rgba(56, 56, 56, 0.94), rgba(32, 32, 32, 0.9)),
+    rgba(32, 32, 32, 0.9);
+  color: #ffffff;
 }

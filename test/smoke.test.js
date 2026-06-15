@@ -237,3 +237,201 @@ test("node title with HTML/script characters renders as inert text", () => {
   assert.ok(firstSpan, "a search result should appear");
   assert.equal(firstSpan.textContent, evilTitle, "search result title span must be literal text");
 });
+
+// --- Accessibility / UX pass tests --------------------------------------------
+
+test("setup dialog exposes modal dialog semantics", () => {
+  const app = bootApp({ storage: [] });
+  assert.deepEqual(app.errors.map((e) => e.message), [], "boot should not throw");
+
+  const panel = app.document.querySelector("#setupPanel");
+  assert.equal(panel.getAttribute("role"), "dialog", "setup panel should be role=dialog");
+  assert.equal(panel.getAttribute("aria-modal"), "true", "setup panel should be aria-modal=true");
+  const labelledby = panel.getAttribute("aria-labelledby");
+  assert.ok(labelledby, "setup panel should have aria-labelledby");
+  const heading = app.document.getElementById(labelledby);
+  assert.ok(heading, "aria-labelledby must point to a real element");
+  assert.equal(heading.tagName, "H2", "aria-labelledby should point to the dialog <h2>");
+});
+
+test("first-run boot moves focus to the setup goal input", () => {
+  const app = bootApp({ storage: [] });
+  assert.deepEqual(app.errors.map((e) => e.message), [], "boot should not throw");
+  const goalInput = app.document.querySelector("#setupGoalInput");
+  assert.equal(
+    app.document.activeElement,
+    goalInput,
+    "on first run, focus should land on #setupGoalInput",
+  );
+});
+
+test("setup close button is hidden/disabled with no graph, enabled with a graph", () => {
+  const empty = bootApp({ storage: [] });
+  const closeEmpty = empty.document.querySelector("#closeSetupButton");
+  assert.equal(closeEmpty.disabled, true, "close button must be disabled when no graph exists");
+  assert.equal(closeEmpty.hidden, true, "close button must be hidden when no graph exists");
+
+  const withGraph = bootApp({ storage: validGraph() });
+  const closeWithGraph = withGraph.document.querySelector("#closeSetupButton");
+  assert.equal(closeWithGraph.disabled, false, "close button must be enabled once a graph exists");
+  assert.equal(closeWithGraph.hidden, false, "close button must be visible once a graph exists");
+});
+
+test("dead history controls are removed from the DOM", () => {
+  const app = bootApp({ storage: validGraph() });
+  assert.equal(
+    app.document.querySelector(".history-controls"),
+    null,
+    "the decorative .history-controls should no longer exist",
+  );
+});
+
+test("inspector is a region, not a modal", () => {
+  const app = bootApp({ storage: validGraph() });
+  const inspector = app.document.querySelector("#inspector");
+  assert.equal(inspector.getAttribute("role"), "region", "inspector should be role=region");
+  assert.equal(inspector.getAttribute("aria-modal"), null, "inspector must NOT be aria-modal");
+  assert.ok(inspector.getAttribute("aria-label"), "inspector should have an aria-label");
+});
+
+test("placement mode shows a visible Cancel control and toggles off", () => {
+  const app = bootApp({ storage: validGraph() });
+  const addButton = app.document.querySelector("#addChildButton");
+  const modeCancel = app.document.querySelector("#modeCancel");
+
+  assert.equal(modeCancel.hidden, true, "Cancel chip should be hidden initially");
+
+  // Enter placement mode.
+  addButton.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  assert.equal(modeCancel.hidden, false, "Cancel chip should appear in placement mode");
+  assert.ok(
+    app.document.querySelector(".graph-shell").classList.contains("is-placing"),
+    "shell should be in placing state",
+  );
+
+  // Re-clicking the originating button toggles placement mode off.
+  addButton.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  assert.equal(
+    app.document.querySelector(".graph-shell").classList.contains("is-placing"),
+    false,
+    "re-clicking #addChildButton should toggle placement mode off",
+  );
+  assert.equal(modeCancel.hidden, true, "Cancel chip should hide once placement mode is off");
+});
+
+test("Cancel control clears an active placement mode", () => {
+  const app = bootApp({ storage: validGraph() });
+  const addButton = app.document.querySelector("#addChildButton");
+  const cancelButton = app.document.querySelector("#modeCancelButton");
+
+  addButton.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  assert.ok(
+    app.document.querySelector(".graph-shell").classList.contains("is-placing"),
+    "placement mode should be active",
+  );
+
+  cancelButton.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  assert.equal(
+    app.document.querySelector(".graph-shell").classList.contains("is-placing"),
+    false,
+    "Cancel control should clear placement mode",
+  );
+  assert.equal(
+    app.document.querySelector("#modeCancel").hidden,
+    true,
+    "Cancel chip should hide after cancelling",
+  );
+});
+
+test("focus toggle buttons expose aria-pressed reflecting focus mode", () => {
+  const app = bootApp({ storage: validGraph() });
+  const focusButton = app.document.querySelector("#focusButton");
+  const globalViewButton = app.document.querySelector("#globalViewButton");
+
+  assert.equal(focusButton.getAttribute("aria-pressed"), "false", "focusButton starts unpressed");
+  assert.equal(
+    globalViewButton.getAttribute("aria-pressed"),
+    "false",
+    "globalViewButton starts unpressed",
+  );
+
+  // Toggle focus mode on via the right-rail button.
+  focusButton.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  assert.equal(
+    focusButton.getAttribute("aria-pressed"),
+    "true",
+    "focusButton should reflect focus mode on",
+  );
+  assert.equal(
+    globalViewButton.getAttribute("aria-pressed"),
+    "true",
+    "globalViewButton should reflect focus mode on",
+  );
+});
+
+test("range inputs expose aria-valuetext", () => {
+  const app = bootApp({ storage: validGraph() });
+
+  // Select a node so the inspector renders its confidence/depth sliders.
+  const node = app.document.querySelector(".graph-node");
+  node.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+
+  const confidence = app.document.querySelector("#confidenceInput");
+  const depth = app.document.querySelector("#localDepthInput");
+
+  assert.ok(
+    /percent$/.test(confidence.getAttribute("aria-valuetext") || ""),
+    `confidence slider should expose a "N percent" aria-valuetext (got ${JSON.stringify(confidence.getAttribute("aria-valuetext"))})`,
+  );
+  assert.ok(
+    /\bstep(s)?$/.test(depth.getAttribute("aria-valuetext") || ""),
+    `local depth slider should expose a "N step(s)" aria-valuetext (got ${JSON.stringify(depth.getAttribute("aria-valuetext"))})`,
+  );
+});
+
+test("progressbars expose role=progressbar with numeric aria-valuenow", () => {
+  const app = bootApp({ storage: validGraph() });
+
+  const focusBar = app.document.querySelector("#focusProgressBar");
+  assert.equal(focusBar.getAttribute("role"), "progressbar", "focus progress bar should be a progressbar");
+  assert.ok(/^\d+$/.test(focusBar.getAttribute("aria-valuenow") || ""), "focus bar aria-valuenow should be numeric");
+
+  // Select a node so the preview readiness bar renders.
+  const node = app.document.querySelector(".graph-node");
+  node.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+
+  const readinessBar = app.document.querySelector("#previewReadinessBar");
+  assert.equal(
+    readinessBar.getAttribute("role"),
+    "progressbar",
+    "preview readiness bar should be a progressbar",
+  );
+  assert.ok(
+    /^\d+$/.test(readinessBar.getAttribute("aria-valuenow") || ""),
+    "readiness bar aria-valuenow should be numeric",
+  );
+
+  const ring = app.document.querySelector("#confidenceRing");
+  assert.ok(
+    /\d/.test(ring.getAttribute("aria-label") || ""),
+    "confidence ring accessible name should include the numeric value",
+  );
+});
+
+test("keyboard shortcuts are ignored when focus is on a button", () => {
+  const app = bootApp({ storage: validGraph() });
+  // Focus the New button (a real interactive control) and press a single-key
+  // shortcut; it must NOT hijack the keypress (the search input must not focus).
+  const newButton = app.document.querySelector("#newMapButton");
+  newButton.focus();
+
+  const event = new app.window.KeyboardEvent("keydown", { key: "/", bubbles: true });
+  newButton.dispatchEvent(event);
+
+  const searchInput = app.document.querySelector("#nodeSearchInput");
+  assert.notEqual(
+    app.document.activeElement,
+    searchInput,
+    "the / shortcut must not steal focus while a button is focused",
+  );
+});
