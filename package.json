@@ -2,5 +2,11 @@
   "name": "achievement-graph",
   "version": "1.0.0",
   "private": true,
-  "description": "Research-backed achievement graph visualization"
+  "description": "Research-backed achievement graph visualization",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
 }
