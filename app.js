@@ -1,19 +1,27 @@
-const STORAGE_KEY = "achievement-graph-v2";
+const LEGACY_STORAGE_KEY = "achievement-graph-v2";
+const MAPS_STORAGE_KEY = "achievement-graph-maps-v1";
 const COACH_STORAGE_KEY = "achievement-graph-coach-seen-v1";
 const MILESTONES = [25, 50, 75, 100];
 
-let nodes = loadNodes();
+const mapLibrary = loadMapLibrary();
+let maps = mapLibrary.maps;
+let activeMapId = mapLibrary.activeMapId;
+let nodes = getActiveMap()?.nodes || [];
 let selectedId = null;
-let setupOpen = nodes.length === 0;
+let setupOpen = !nodes.length;
 let ritualCollapsed = true;
 let placementMode = false;
 let connectFromId = null;
 let coachOpen = nodes.length > 0 && localStorage.getItem(COACH_STORAGE_KEY) !== "true";
+let pendingDeleteMapId = null;
 
 const setupPanel = document.querySelector("#setupPanel");
 const closeSetupButton = document.querySelector("#closeSetupButton");
+const setupMapNameInput = document.querySelector("#setupMapNameInput");
 const setupGoalInput = document.querySelector("#setupGoalInput");
 const setupPrereqInput = document.querySelector("#setupPrereqInput");
+const mapSelect = document.querySelector("#mapSelect");
+const deleteMapButton = document.querySelector("#deleteMapButton");
 const graphShell = document.querySelector(".graph-shell");
 const graphCanvas = document.querySelector(".achievement-map");
 const mapEl = document.querySelector("#achievementMap");
@@ -110,21 +118,76 @@ let buzzTimer = null;
 let nodeDrag = null;
 let suppressedNodeClickId = null;
 
-function loadNodes() {
-  const raw = localStorage.getItem(STORAGE_KEY);
+function loadMapLibrary() {
+  const raw = localStorage.getItem(MAPS_STORAGE_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      const loadedMaps = Array.isArray(parsed?.maps)
+        ? parsed.maps.filter((map) => map?.id && Array.isArray(map.nodes))
+        : [];
+      const activeId = loadedMaps.some((map) => map.id === parsed?.activeMapId)
+        ? parsed.activeMapId
+        : loadedMaps[0]?.id || null;
+
+      return { maps: loadedMaps, activeMapId: activeId };
+    } catch {
+      return { maps: [], activeMapId: null };
+    }
+  }
+
+  const legacyNodes = loadLegacyNodes();
+  if (!legacyNodes.length) return { maps: [], activeMapId: null };
+
+  const map = createMapRecord({
+    name: getMapNameFromNodes(legacyNodes),
+    nodes: legacyNodes,
+  });
+  localStorage.setItem(MAPS_STORAGE_KEY, JSON.stringify({ activeMapId: map.id, maps: [map] }));
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
+
+  return { maps: [map], activeMapId: map.id };
+}
+
+function loadLegacyNodes() {
+  const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
   if (!raw) return [];
 
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     if (isLegacyExampleMap(parsed)) {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
       return [];
     }
     return parsed;
   } catch {
     return [];
   }
+}
+
+function createMapRecord({ name, nodes: mapNodes }) {
+  const now = new Date().toISOString();
+  return {
+    id: makeId("map"),
+    name: name?.trim() || getMapNameFromNodes(mapNodes),
+    nodes: mapNodes,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function getMapNameFromNodes(mapNodes = nodes) {
+  const top = mapNodes.find((node) => !node.parentId) || mapNodes[0];
+  return top?.title?.trim() || "Untitled map";
+}
+
+function getActiveMap() {
+  return maps.find((map) => map.id === activeMapId) || null;
+}
+
+function persistMaps() {
+  localStorage.setItem(MAPS_STORAGE_KEY, JSON.stringify({ activeMapId, maps }));
 }
 
 function isLegacyExampleMap(value) {
@@ -136,7 +199,12 @@ function isLegacyExampleMap(value) {
 }
 
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nodes));
+  const activeMap = getActiveMap();
+  if (!activeMap) return;
+
+  activeMap.nodes = nodes;
+  activeMap.updatedAt = new Date().toISOString();
+  persistMaps();
 }
 
 function getProgressStats() {
@@ -169,6 +237,96 @@ function dismissCoach() {
   coachOpen = false;
   localStorage.setItem(COACH_STORAGE_KEY, "true");
   renderCoach();
+}
+
+function resetTransientState() {
+  selectedId = null;
+  ritualCollapsed = true;
+  placementMode = false;
+  connectFromId = null;
+  nodeDrag = null;
+  suppressedNodeClickId = null;
+  activePointers.clear();
+  view.scale = 1;
+  view.x = 0;
+  view.y = 0;
+  view.focusMode = false;
+  view.isPanning = false;
+  inspector.classList.remove("is-open");
+  inspector.classList.remove("is-editing");
+  completionToast.classList.remove("is-visible");
+  graphShell.classList.remove("is-celebrating");
+  graphShell.classList.remove("is-path-unlocked");
+  graphShell.classList.remove("is-milestone");
+  nodeSearchInput.value = "";
+  nodeSearch.classList.remove("is-open");
+  searchResults.innerHTML = "";
+}
+
+function renderMapLibrary() {
+  mapSelect.innerHTML = "";
+  if (!maps.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No map yet";
+    mapSelect.append(option);
+    mapSelect.disabled = true;
+    deleteMapButton.disabled = true;
+    deleteMapButton.classList.remove("is-confirming");
+    deleteMapButton.textContent = "Delete";
+    return;
+  }
+
+  maps.forEach((map) => {
+    const option = document.createElement("option");
+    option.value = map.id;
+    option.textContent = map.name || getMapNameFromNodes(map.nodes);
+    mapSelect.append(option);
+  });
+
+  mapSelect.disabled = false;
+  mapSelect.value = activeMapId || maps[0].id;
+  deleteMapButton.disabled = false;
+  const isConfirming = pendingDeleteMapId === activeMapId;
+  deleteMapButton.classList.toggle("is-confirming", isConfirming);
+  deleteMapButton.textContent = isConfirming ? "Confirm" : "Delete";
+}
+
+function switchMap(id) {
+  if (!id || id === activeMapId) return;
+  save();
+  activeMapId = id;
+  nodes = getActiveMap()?.nodes || [];
+  pendingDeleteMapId = null;
+  resetTransientState();
+  setupOpen = !nodes.length;
+  coachOpen = nodes.length > 0 && localStorage.getItem(COACH_STORAGE_KEY) !== "true";
+  persistMaps();
+  buzz("soft");
+  render();
+}
+
+function deleteActiveMap() {
+  const activeMap = getActiveMap();
+  if (!activeMap) return;
+
+  if (pendingDeleteMapId !== activeMap.id) {
+    pendingDeleteMapId = activeMap.id;
+    buzz("soft");
+    renderMapLibrary();
+    return;
+  }
+
+  maps = maps.filter((map) => map.id !== activeMap.id);
+  activeMapId = maps[0]?.id || null;
+  nodes = getActiveMap()?.nodes || [];
+  pendingDeleteMapId = null;
+  resetTransientState();
+  setupOpen = !nodes.length;
+  coachOpen = nodes.length > 0 && localStorage.getItem(COACH_STORAGE_KEY) !== "true";
+  persistMaps();
+  buzz("delete");
+  render();
 }
 
 function buzz(type = "soft", event = null) {
@@ -656,6 +814,7 @@ function showCompletion(node, previousProgress = 0) {
 }
 
 function renderSetup() {
+  renderMapLibrary();
   setupPanel.classList.toggle("is-hidden", !setupOpen);
   setupPanel.classList.toggle("can-close", nodes.length > 0);
 }
@@ -1000,12 +1159,13 @@ function createInitialMap() {
   }
 
   const topId = makeId("top");
+  const mapName = setupMapNameInput.value.trim() || title;
   const prereqs = setupPrereqInput.value
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
 
-  nodes = [
+  const nextNodes = [
     {
       id: topId,
       parentId: null,
@@ -1032,15 +1192,20 @@ function createInitialMap() {
     })),
   ];
 
+  const nextMap = createMapRecord({ name: mapName, nodes: nextNodes });
+  maps.push(nextMap);
+  activeMapId = nextMap.id;
+  nodes = nextMap.nodes;
   selectedId = topId;
   setupOpen = false;
   ritualCollapsed = true;
   placementMode = false;
   connectFromId = null;
+  pendingDeleteMapId = null;
   inspector.classList.add("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
-  save();
+  persistMaps();
   buzz("create");
   showCoach();
   render();
@@ -1052,14 +1217,16 @@ function openNewMap() {
   selectedId = null;
   placementMode = false;
   connectFromId = null;
+  pendingDeleteMapId = null;
   coachOpen = false;
   inspector.classList.remove("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
+  setupMapNameInput.value = "";
   setupGoalInput.value = "";
   setupPrereqInput.value = "";
   render();
-  setupGoalInput.focus();
+  setupMapNameInput.focus();
 }
 
 function closeSetup() {
@@ -1069,6 +1236,7 @@ function closeSetup() {
   placementMode = false;
   connectFromId = null;
   coachOpen = localStorage.getItem(COACH_STORAGE_KEY) !== "true";
+  setupMapNameInput.value = "";
   setupGoalInput.value = "";
   setupPrereqInput.value = "";
   render();
@@ -1344,6 +1512,8 @@ Object.entries(inputs).forEach(([key, input]) => {
 });
 
 document.querySelector("#createMapButton").addEventListener("click", createInitialMap);
+mapSelect.addEventListener("change", () => switchMap(mapSelect.value));
+deleteMapButton.addEventListener("click", deleteActiveMap);
 document.querySelector("#newMapButton").addEventListener("click", (event) => {
   buzz("soft", event);
   openNewMap();

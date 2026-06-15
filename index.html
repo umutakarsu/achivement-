@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Achievement Graph</title>
-    <link rel="stylesheet" href="styles.css?v=frosted-interactions-1" />
+    <link rel="stylesheet" href="styles.css?v=named-maps-1" />
   </head>
   <body>
     <main class="graph-shell">
@@ -13,7 +13,16 @@
           <span>&lt;</span>
           <span>&gt;</span>
         </div>
-        <h1>Achievement Graph</h1>
+        <div class="title-stack">
+          <h1>Achievement Graph</h1>
+          <div class="map-library" aria-label="Saved achievement maps">
+            <label>
+              <span>Map</span>
+              <select id="mapSelect" aria-label="Switch achievement map"></select>
+            </label>
+            <button id="deleteMapButton" type="button">Delete</button>
+          </div>
+        </div>
         <div class="toolbar-actions">
           <button id="newMapButton" type="button">New</button>
         </div>
@@ -149,6 +158,15 @@
             <span><strong>2</strong> Add only required steps</span>
             <span><strong>3</strong> Complete the next visible move</span>
           </div>
+          <label>
+            Map name
+            <input
+              id="setupMapNameInput"
+              type="text"
+              placeholder="Marathon, Startup, Health"
+              autocomplete="off"
+            />
+          </label>
           <label>
             Top achievement
             <input
@@ -314,6 +332,6 @@
       </button>
     </template>
 
-    <script src="app.js?v=frosted-interactions-1"></script>
+    <script src="app.js?v=named-maps-1"></script>
   </body>
 </html>
