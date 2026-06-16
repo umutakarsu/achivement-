@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Achievement Graph</title>
-    <link rel="stylesheet" href="styles.css?v=buzz-effects-1" />
+    <link rel="stylesheet" href="styles.css?v=named-maps-1" />
   </head>
   <body>
     <main class="graph-shell">
@@ -13,7 +13,16 @@
           <span>&lt;</span>
           <span>&gt;</span>
         </div>
-        <h1>Achievement Graph</h1>
+        <div class="title-stack">
+          <h1>Achievement Graph</h1>
+          <div class="map-library" aria-label="Saved achievement maps">
+            <label>
+              <span>Map</span>
+              <select id="mapSelect" aria-label="Switch achievement map"></select>
+            </label>
+            <button id="deleteMapButton" type="button">Delete</button>
+          </div>
+        </div>
         <div class="toolbar-actions">
           <button id="newMapButton" type="button">New</button>
         </div>
@@ -37,6 +46,16 @@
 
       <aside class="graph-hint" id="graphHint" aria-live="polite"></aside>
 
+      <section class="selection-hud" id="selectionHud" aria-label="Selected node quick view">
+        <span class="eyebrow" id="selectionHudMeta">Selected</span>
+        <strong id="selectionHudTitle">Achievement</strong>
+        <p id="selectionHudAction">Define the next action.</p>
+        <div class="selection-hud-actions">
+          <button id="selectionHudDone" type="button">Done</button>
+          <button id="selectionHudEdit" class="quiet-button" type="button">Edit</button>
+        </div>
+      </section>
+
       <div class="feedback-layer" id="feedbackLayer" aria-hidden="true"></div>
 
       <section class="completion-toast" id="completionToast" aria-live="polite" aria-label="Completion feedback">
@@ -50,6 +69,12 @@
         <div class="focus-progress" aria-hidden="true">
           <span id="focusProgressBar"></span>
         </div>
+        <div class="reward-rail" id="rewardRail" aria-label="Progress milestones">
+          <span data-milestone="25">25</span>
+          <span data-milestone="50">50</span>
+          <span data-milestone="75">75</span>
+          <span data-milestone="100">100</span>
+        </div>
         <div class="focus-kicker">
           <span class="eyebrow">Today</span>
           <span id="focusProgressText">0% complete</span>
@@ -58,6 +83,7 @@
           <strong id="focusNodeTitle">Choose a goal</strong>
           <p id="focusNodeWhy">Choose the move that makes the whole path lighter.</p>
           <p id="focusNodeAction">Build the first visible step toward the peak.</p>
+          <p id="rewardCopy" class="reward-copy">Next reward at 25%.</p>
         </div>
         <div class="ritual-woop" aria-label="Daily plan">
           <span><strong>Wish</strong><em id="ritualWish">Make the peak real</em></span>
@@ -68,6 +94,19 @@
         <div class="focus-actions">
           <button id="focusOpenButton" type="button">Start move</button>
           <button id="exploreMapButton" class="quiet-button" type="button">Explore map</button>
+        </div>
+      </section>
+
+      <section class="map-coach" id="mapCoach" aria-label="How to read the achievement map">
+        <span class="eyebrow">Read the map in 10 seconds</span>
+        <div class="coach-steps">
+          <span><strong>Peak</strong>The top node is the achievement you want.</span>
+          <span><strong>Support</strong>Nodes below are prerequisites that make it possible.</span>
+          <span><strong>Move</strong>Tap a node, define one next action, then mark it done.</span>
+        </div>
+        <div class="coach-actions">
+          <button id="coachStartButton" type="button">Start next move</button>
+          <button id="coachDismissButton" class="quiet-button" type="button">Got it</button>
         </div>
       </section>
 
@@ -86,8 +125,8 @@
         >
           Edit
         </button>
-        <button id="addChildButton" type="button" aria-label="Add sub achievement" data-tip="Add sub achievement">
-          Sub
+        <button id="addChildButton" type="button" aria-label="Add achievement" data-tip="Add achievement">
+          Add
         </button>
         <button
           id="nextNodeButton"
@@ -114,12 +153,26 @@
             Keep the graph simple first. Add only the achievements that must become true before the peak
             can happen. Your current graph stays unchanged until you create the new one.
           </p>
+          <div class="setup-rhythm" aria-label="How the map works">
+            <span><strong>1</strong> Name the peak</span>
+            <span><strong>2</strong> Add only required steps</span>
+            <span><strong>3</strong> Complete the next visible move</span>
+          </div>
+          <label>
+            Map name
+            <input
+              id="setupMapNameInput"
+              type="text"
+              placeholder="Marathon, Startup, Health"
+              autocomplete="off"
+            />
+          </label>
           <label>
             Top achievement
             <input
               id="setupGoalInput"
               type="text"
-              placeholder="Launch my first paid product"
+              placeholder="Run my first marathon"
               autocomplete="off"
             />
           </label>
@@ -128,9 +181,9 @@
             <textarea
               id="setupPrereqInput"
               rows="5"
-              placeholder="One per line, like: validate the idea&#10;build the first version&#10;get 10 users"
+              placeholder="One per line, like: build base endurance&#10;learn fuel and recovery&#10;pick a race date"
             ></textarea>
-            <span class="field-help">These become the first linked nodes under your top achievement.</span>
+            <span class="field-help">Use prerequisites, not tasks. Tiny tasks go inside each node later.</span>
           </label>
           <div class="setup-actions">
             <button id="createMapButton" type="button">Create graph</button>
@@ -164,6 +217,10 @@
             <span id="previewStatusPill" class="preview-pill is-status">Open</span>
             <span id="previewClearPill" class="preview-pill">6 of 6 clear</span>
           </div>
+          <div class="node-guidance" id="previewGuidance" aria-live="polite">
+            <span class="eyebrow">Next best move</span>
+            <strong id="previewGuidanceText">Make the next action concrete.</strong>
+          </div>
           <div class="preview-readiness" aria-label="Readiness score">
             <span id="previewReadinessBar"></span>
           </div>
@@ -193,7 +250,7 @@
           <div class="preview-actions">
             <button id="previewDoneButton" class="primary-preview-action" type="button">Done</button>
             <button id="editDetailsButton" type="button">Edit</button>
-            <button id="linkNodeButton" type="button">Link</button>
+            <button id="linkNodeButton" type="button">Connect</button>
             <button id="globalViewButton" type="button">Local</button>
           </div>
         </section>
@@ -275,6 +332,6 @@
       </button>
     </template>
 
-    <script src="app.js?v=buzz-effects-1"></script>
+    <script src="app.js?v=named-maps-1"></script>
   </body>
 </html>

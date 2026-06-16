@@ -1,16 +1,27 @@
-const STORAGE_KEY = "achievement-graph-v2";
+const LEGACY_STORAGE_KEY = "achievement-graph-v2";
+const MAPS_STORAGE_KEY = "achievement-graph-maps-v1";
+const COACH_STORAGE_KEY = "achievement-graph-coach-seen-v1";
+const MILESTONES = [25, 50, 75, 100];
 
-let nodes = loadNodes();
+const mapLibrary = loadMapLibrary();
+let maps = mapLibrary.maps;
+let activeMapId = mapLibrary.activeMapId;
+let nodes = getActiveMap()?.nodes || [];
 let selectedId = null;
-let setupOpen = nodes.length === 0;
+let setupOpen = !nodes.length;
 let ritualCollapsed = true;
 let placementMode = false;
 let connectFromId = null;
+let coachOpen = nodes.length > 0 && localStorage.getItem(COACH_STORAGE_KEY) !== "true";
+let pendingDeleteMapId = null;
 
 const setupPanel = document.querySelector("#setupPanel");
 const closeSetupButton = document.querySelector("#closeSetupButton");
+const setupMapNameInput = document.querySelector("#setupMapNameInput");
 const setupGoalInput = document.querySelector("#setupGoalInput");
 const setupPrereqInput = document.querySelector("#setupPrereqInput");
+const mapSelect = document.querySelector("#mapSelect");
+const deleteMapButton = document.querySelector("#deleteMapButton");
 const graphShell = document.querySelector(".graph-shell");
 const graphCanvas = document.querySelector(".achievement-map");
 const mapEl = document.querySelector("#achievementMap");
@@ -33,6 +44,12 @@ const focusNodeWhy = document.querySelector("#focusNodeWhy");
 const focusNodeAction = document.querySelector("#focusNodeAction");
 const focusOpenButton = document.querySelector("#focusOpenButton");
 const exploreMapButton = document.querySelector("#exploreMapButton");
+const rewardRail = document.querySelector("#rewardRail");
+const rewardCopy = document.querySelector("#rewardCopy");
+const mapCoach = document.querySelector("#mapCoach");
+const coachStartButton = document.querySelector("#coachStartButton");
+const coachDismissButton = document.querySelector("#coachDismissButton");
+const addChildButton = document.querySelector("#addChildButton");
 const ritualWish = document.querySelector("#ritualWish");
 const ritualOutcome = document.querySelector("#ritualOutcome");
 const ritualObstacle = document.querySelector("#ritualObstacle");
@@ -42,10 +59,18 @@ const nodeSearchInput = document.querySelector("#nodeSearchInput");
 const searchResults = document.querySelector("#searchResults");
 const inspector = document.querySelector("#inspector");
 const inspectorPath = document.querySelector("#inspectorPath");
+const selectionHud = document.querySelector("#selectionHud");
+const selectionHudMeta = document.querySelector("#selectionHudMeta");
+const selectionHudTitle = document.querySelector("#selectionHudTitle");
+const selectionHudAction = document.querySelector("#selectionHudAction");
+const selectionHudDone = document.querySelector("#selectionHudDone");
+const selectionHudEdit = document.querySelector("#selectionHudEdit");
 const previewTitle = document.querySelector("#previewTitle");
 const previewMeta = document.querySelector("#previewMeta");
 const previewStatusPill = document.querySelector("#previewStatusPill");
 const previewClearPill = document.querySelector("#previewClearPill");
+const previewGuidance = document.querySelector("#previewGuidance");
+const previewGuidanceText = document.querySelector("#previewGuidanceText");
 const confidenceRing = document.querySelector("#confidenceRing");
 const confidenceRingValue = document.querySelector("#confidenceRingValue");
 const previewReadinessBar = document.querySelector("#previewReadinessBar");
@@ -90,22 +115,79 @@ const view = {
 const activePointers = new Map();
 let completionTimer = null;
 let buzzTimer = null;
+let nodeDrag = null;
+let suppressedNodeClickId = null;
 
-function loadNodes() {
-  const raw = localStorage.getItem(STORAGE_KEY);
+function loadMapLibrary() {
+  const raw = localStorage.getItem(MAPS_STORAGE_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      const loadedMaps = Array.isArray(parsed?.maps)
+        ? parsed.maps.filter((map) => map?.id && Array.isArray(map.nodes))
+        : [];
+      const activeId = loadedMaps.some((map) => map.id === parsed?.activeMapId)
+        ? parsed.activeMapId
+        : loadedMaps[0]?.id || null;
+
+      return { maps: loadedMaps, activeMapId: activeId };
+    } catch {
+      return { maps: [], activeMapId: null };
+    }
+  }
+
+  const legacyNodes = loadLegacyNodes();
+  if (!legacyNodes.length) return { maps: [], activeMapId: null };
+
+  const map = createMapRecord({
+    name: getMapNameFromNodes(legacyNodes),
+    nodes: legacyNodes,
+  });
+  localStorage.setItem(MAPS_STORAGE_KEY, JSON.stringify({ activeMapId: map.id, maps: [map] }));
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
+
+  return { maps: [map], activeMapId: map.id };
+}
+
+function loadLegacyNodes() {
+  const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
   if (!raw) return [];
 
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     if (isLegacyExampleMap(parsed)) {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
       return [];
     }
     return parsed;
   } catch {
     return [];
   }
+}
+
+function createMapRecord({ name, nodes: mapNodes }) {
+  const now = new Date().toISOString();
+  return {
+    id: makeId("map"),
+    name: name?.trim() || getMapNameFromNodes(mapNodes),
+    nodes: mapNodes,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function getMapNameFromNodes(mapNodes = nodes) {
+  const top = mapNodes.find((node) => !node.parentId) || mapNodes[0];
+  return top?.title?.trim() || "Untitled map";
+}
+
+function getActiveMap() {
+  return maps.find((map) => map.id === activeMapId) || null;
+}
+
+function persistMaps() {
+  localStorage.setItem(MAPS_STORAGE_KEY, JSON.stringify({ activeMapId, maps }));
 }
 
 function isLegacyExampleMap(value) {
@@ -117,7 +199,134 @@ function isLegacyExampleMap(value) {
 }
 
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nodes));
+  const activeMap = getActiveMap();
+  if (!activeMap) return;
+
+  activeMap.nodes = nodes;
+  activeMap.updatedAt = new Date().toISOString();
+  persistMaps();
+}
+
+function getProgressStats() {
+  const total = nodes.length;
+  const done = nodes.filter((node) => node.done).length;
+  const progress = total ? Math.round((done / total) * 100) : 0;
+  const nextMilestone = MILESTONES.find((milestone) => progress < milestone) || 100;
+  const lastMilestone = [...MILESTONES].reverse().find((milestone) => progress >= milestone) || 0;
+
+  return {
+    done,
+    total,
+    progress,
+    lastMilestone,
+    nextMilestone,
+    remainingToNext: Math.max(0, nextMilestone - progress),
+  };
+}
+
+function getCrossedMilestone(previousProgress, nextProgress) {
+  return [...MILESTONES].reverse().find((milestone) => previousProgress < milestone && nextProgress >= milestone) || null;
+}
+
+function showCoach() {
+  coachOpen = nodes.length > 0 && localStorage.getItem(COACH_STORAGE_KEY) !== "true";
+  renderCoach();
+}
+
+function dismissCoach() {
+  coachOpen = false;
+  localStorage.setItem(COACH_STORAGE_KEY, "true");
+  renderCoach();
+}
+
+function resetTransientState() {
+  selectedId = null;
+  ritualCollapsed = true;
+  placementMode = false;
+  connectFromId = null;
+  nodeDrag = null;
+  suppressedNodeClickId = null;
+  activePointers.clear();
+  view.scale = 1;
+  view.x = 0;
+  view.y = 0;
+  view.focusMode = false;
+  view.isPanning = false;
+  inspector.classList.remove("is-open");
+  inspector.classList.remove("is-editing");
+  completionToast.classList.remove("is-visible");
+  graphShell.classList.remove("is-celebrating");
+  graphShell.classList.remove("is-path-unlocked");
+  graphShell.classList.remove("is-milestone");
+  nodeSearchInput.value = "";
+  nodeSearch.classList.remove("is-open");
+  searchResults.innerHTML = "";
+}
+
+function renderMapLibrary() {
+  mapSelect.innerHTML = "";
+  if (!maps.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No map yet";
+    mapSelect.append(option);
+    mapSelect.disabled = true;
+    deleteMapButton.disabled = true;
+    deleteMapButton.classList.remove("is-confirming");
+    deleteMapButton.textContent = "Delete";
+    return;
+  }
+
+  maps.forEach((map) => {
+    const option = document.createElement("option");
+    option.value = map.id;
+    option.textContent = map.name || getMapNameFromNodes(map.nodes);
+    mapSelect.append(option);
+  });
+
+  mapSelect.disabled = false;
+  mapSelect.value = activeMapId || maps[0].id;
+  deleteMapButton.disabled = false;
+  const isConfirming = pendingDeleteMapId === activeMapId;
+  deleteMapButton.classList.toggle("is-confirming", isConfirming);
+  deleteMapButton.textContent = isConfirming ? "Confirm" : "Delete";
+}
+
+function switchMap(id) {
+  if (!id || id === activeMapId) return;
+  save();
+  activeMapId = id;
+  nodes = getActiveMap()?.nodes || [];
+  pendingDeleteMapId = null;
+  resetTransientState();
+  setupOpen = !nodes.length;
+  coachOpen = nodes.length > 0 && localStorage.getItem(COACH_STORAGE_KEY) !== "true";
+  persistMaps();
+  buzz("soft");
+  render();
+}
+
+function deleteActiveMap() {
+  const activeMap = getActiveMap();
+  if (!activeMap) return;
+
+  if (pendingDeleteMapId !== activeMap.id) {
+    pendingDeleteMapId = activeMap.id;
+    buzz("soft");
+    renderMapLibrary();
+    return;
+  }
+
+  maps = maps.filter((map) => map.id !== activeMap.id);
+  activeMapId = maps[0]?.id || null;
+  nodes = getActiveMap()?.nodes || [];
+  pendingDeleteMapId = null;
+  resetTransientState();
+  setupOpen = !nodes.length;
+  coachOpen = nodes.length > 0 && localStorage.getItem(COACH_STORAGE_KEY) !== "true";
+  persistMaps();
+  buzz("delete");
+  render();
 }
 
 function buzz(type = "soft", event = null) {
@@ -219,6 +428,17 @@ function getRelatedIds() {
   return related;
 }
 
+function getDirectNeighborIds(nodeId = selectedId) {
+  const direct = new Set();
+  const node = nodes.find((candidate) => candidate.id === nodeId);
+  if (!node) return direct;
+
+  direct.add(node.id);
+  if (node.parentId) direct.add(node.parentId);
+  childrenOf(node.id).forEach((child) => direct.add(child.id));
+  return direct;
+}
+
 function getVisibleIds() {
   if (!view.focusMode) return new Set(nodes.map((node) => node.id));
   return getRelatedIds();
@@ -253,6 +473,47 @@ function getReadinessChecks(node) {
   ];
 }
 
+function getGuidance(node) {
+  if (node.done) {
+    return {
+      tone: "done",
+      text: "Promise kept. Choose the next open node.",
+    };
+  }
+
+  const checks = getReadinessChecks(node);
+  const missing = checks.find((check) => !check.met);
+  const childCount = childrenOf(node.id).length;
+
+  if (!missing) {
+    return {
+      tone: "ready",
+      text: "Clear enough. Do the next action, then mark it done.",
+    };
+  }
+
+  const guidanceByLabel = {
+    "Specific achievement": "Make the title concrete enough that you can picture the finish line.",
+    "Self-endorsed why": "Add why this matters to you, not why it should matter to someone else.",
+    "Proof of completion": "Define the proof. What visible evidence means this is done?",
+    "Named blocker": "Name the most likely blocker before it surprises you.",
+    "Small next action": "Shrink this to one action you can start without planning.",
+    "Believable enough": "Lower the size of this move or add a supporting node until it feels believable.",
+  };
+
+  if (childCount === 0 && Number(node.confidence) < 65) {
+    return {
+      tone: "small",
+      text: "Add one smaller support node for the hardest blocker.",
+    };
+  }
+
+  return {
+    tone: "open",
+    text: guidanceByLabel[missing.label] || "Clarify the next move before acting.",
+  };
+}
+
 function isReady(node) {
   return getReadinessChecks(node).every((check) => check.met);
 }
@@ -271,6 +532,7 @@ function getNextUnclearNode() {
 
 function getGraphLayout() {
   const groups = new Map();
+  const isCompact = window.innerWidth <= 760;
   nodes.forEach((node) => {
     const depth = getDepth(node);
     if (!groups.has(depth)) groups.set(depth, []);
@@ -281,7 +543,13 @@ function getGraphLayout() {
   const maxDepth = Math.max(1, ...groups.keys());
 
   [...groups.entries()].forEach(([depth, group]) => {
-    const y = depth === 0 ? 16 : 28 + depth * (60 / maxDepth);
+    const y = isCompact
+      ? depth === 0
+        ? 25
+        : 43 + (depth - 1) * (34 / Math.max(1, maxDepth - 1))
+      : depth === 0
+        ? 16
+        : 28 + depth * (60 / maxDepth);
 
     group.forEach((node, index) => {
       const parent = getParent(node);
@@ -298,7 +566,7 @@ function getGraphLayout() {
       const autoPosition = {
         depth,
         x: depth === 0 ? 50 : Math.max(10, Math.min(90, x)),
-        y: Math.max(12, Math.min(88, y)),
+        y: Math.max(isCompact ? 23 : 12, Math.min(isCompact ? 78 : 88, y)),
       };
 
       positions.set(node.id, {
@@ -318,6 +586,7 @@ function renderGraph() {
 
   const positions = getGraphLayout();
   const relatedIds = getRelatedIds();
+  const directNeighborIds = getDirectNeighborIds();
   const visibleIds = getVisibleIds();
   const hasSelection = Boolean(selectedId);
 
@@ -340,6 +609,10 @@ function renderGraph() {
       "is-context",
       relatedIds.has(node.id) && relatedIds.has(node.parentId) && node.parentId === selectedId && !node.done,
     );
+    line.classList.toggle(
+      "is-direct",
+      directNeighborIds.has(node.id) && directNeighborIds.has(node.parentId) && hasSelection,
+    );
     line.classList.toggle("is-complete", node.done);
     linkLayer.append(line);
   });
@@ -347,6 +620,7 @@ function renderGraph() {
   nodes.forEach((node) => {
     const position = positions.get(node.id);
     const button = template.content.firstElementChild.cloneNode(true);
+    const canBeLinkTarget = Boolean(connectFromId) && node.id !== connectFromId && canConnectToParent(connectFromId, node.id);
     button.dataset.id = node.id;
     button.dataset.depth = String(position.depth);
     button.style.left = `${position.x}%`;
@@ -356,9 +630,17 @@ function renderGraph() {
     button.classList.toggle("is-ready", isReady(node));
     button.classList.toggle("is-low-confidence", Number(node.confidence) < 65);
     button.classList.toggle("is-dimmed", hasSelection && !relatedIds.has(node.id));
-    button.classList.toggle("is-link-target", Boolean(connectFromId) && canConnectToParent(connectFromId, node.id));
+    button.classList.toggle("is-neighbor", hasSelection && node.id !== selectedId && directNeighborIds.has(node.id));
+    button.classList.toggle("is-connect-source", connectFromId === node.id);
+    button.classList.toggle("is-link-target", canBeLinkTarget);
+    button.classList.toggle("is-link-disabled", Boolean(connectFromId) && node.id !== connectFromId && !canBeLinkTarget);
     button.hidden = !visibleIds.has(node.id);
     button.querySelector(".node-label").textContent = node.title || "Untitled achievement";
+    button.addEventListener("pointerdown", (event) => beginNodeDrag(node.id, event));
+    button.addEventListener("pointermove", handleNodeDragMove);
+    button.addEventListener("pointerup", endNodeDrag);
+    button.addEventListener("pointercancel", cancelNodeDrag);
+    button.addEventListener("mousedown", (event) => beginNodeDrag(node.id, event));
     button.addEventListener("click", (event) => handleNodeClick(node.id, event));
     mapEl.append(button);
   });
@@ -385,13 +667,79 @@ function renderHint() {
   modeLabel.textContent = mode;
   readinessSummary.textContent = `${ready}/${nodes.length} clear`;
   if (placementMode) {
-    graphHint.textContent = "Place mode. Click anywhere on the canvas to create the new achievement there.";
+    const parent = getSelected();
+    graphHint.textContent = parent
+      ? `Add mode: click the canvas to place a support node under "${shorten(parent.title, "this node", 34)}". Esc cancels.`
+      : "Add mode: click the canvas to place a new top-level node. Esc cancels.";
   } else if (connectFromId) {
-    graphHint.textContent = "Link mode. Click the node this achievement depends on. Press Escape to cancel.";
+    const node = nodes.find((candidate) => candidate.id === connectFromId);
+    graphHint.textContent = `Connect mode: click the parent node for "${shorten(node?.title, "this node", 34)}". Esc cancels.`;
   } else {
-    graphHint.textContent = `${mode}. ${done}/${nodes.length} complete. ${ready}/${nodes.length} clear enough to act on. Average confidence ${avgConfidence}%. Next review: ${next?.title || "none"}. Press / to find, scroll to zoom, drag empty space to pan.`;
+    graphHint.textContent = next
+      ? `${done}/${nodes.length} done - next: ${shorten(next.title, "review a node", 42)}. Scroll zooms, drag pans, / finds.`
+      : `${done}/${nodes.length} done - map is clear. Add the next branch when ready.`;
   }
+  const addLabel = selectedId ? "Add support" : "Add node";
+  addChildButton.textContent = selectedId ? "Support" : "Add";
+  addChildButton.setAttribute("aria-label", addLabel);
+  addChildButton.dataset.tip = addLabel;
   renderFocusTray();
+}
+
+function renderSelectionHud() {
+  const node = getSelected();
+  selectionHud.classList.toggle("is-visible", Boolean(node) && !setupOpen && !placementMode && !connectFromId);
+  if (!node) return;
+
+  const positions = getGraphLayout();
+  const position = positions.get(node.id);
+  const checks = getReadinessChecks(node);
+  const met = checks.filter((check) => check.met).length;
+  const depthLabel = getDepth(node) === 0 ? "Peak" : "Support";
+  const x = position ? (position.x / 100) * graphCanvas.clientWidth * view.scale + view.x : graphCanvas.clientWidth / 2;
+  const y = position ? (position.y / 100) * graphCanvas.clientHeight * view.scale + view.y : graphCanvas.clientHeight / 2;
+  const hudX = Math.max(132, Math.min(graphCanvas.clientWidth - 132, x));
+  const hudY = Math.max(118, Math.min(graphCanvas.clientHeight - 122, y - 76));
+
+  selectionHud.style.left = `${hudX}px`;
+  selectionHud.style.top = `${hudY}px`;
+  selectionHudMeta.textContent = `${depthLabel} - ${met}/${checks.length} clear`;
+  selectionHudTitle.textContent = node.title || "Untitled achievement";
+  selectionHudAction.textContent = node.done
+    ? "Done. Pick the next open move."
+    : node.action.trim()
+      ? `Next: ${node.action.trim()}`
+      : getGuidance(node).text;
+  selectionHudDone.textContent = node.done ? "Reopen" : "Done";
+}
+
+function repaintGraphGeometry() {
+  const positions = getGraphLayout();
+  const visibleIds = getVisibleIds();
+
+  mapEl.querySelectorAll(".graph-node").forEach((button) => {
+    const position = positions.get(button.dataset.id);
+    if (!position) return;
+
+    button.dataset.depth = String(position.depth);
+    button.style.left = `${position.x}%`;
+    button.style.top = `${position.y}%`;
+    button.hidden = !visibleIds.has(button.dataset.id);
+  });
+
+  linkLayer.querySelectorAll(".graph-link").forEach((line) => {
+    const start = positions.get(line.dataset.parentId);
+    const end = positions.get(line.dataset.childId);
+    if (!start || !end) return;
+
+    line.setAttribute("x1", start.x);
+    line.setAttribute("y1", start.y);
+    line.setAttribute("x2", end.x);
+    line.setAttribute("y2", end.y);
+    line.style.display = visibleIds.has(line.dataset.parentId) && visibleIds.has(line.dataset.childId) ? "" : "none";
+  });
+
+  renderSelectionHud();
 }
 
 function renderFocusTray() {
@@ -400,14 +748,13 @@ function renderFocusTray() {
   focusTray.classList.add("is-collapsed");
   if (!nodes.length) return;
 
-  const done = nodes.filter((node) => node.done).length;
+  const stats = getProgressStats();
   const next = getNextUnclearNode();
   const top = nodes.find((node) => !node.parentId) || nodes[0];
-  const progress = Math.round((done / nodes.length) * 100);
-  const isComplete = done === nodes.length;
+  const isComplete = stats.done === stats.total;
 
-  focusProgressBar.style.width = `${progress}%`;
-  focusProgressText.textContent = `${progress}% complete`;
+  focusProgressBar.style.width = `${stats.progress}%`;
+  focusProgressText.textContent = `${stats.progress}% complete`;
   focusNodeTitle.textContent = isComplete ? "Path complete" : next?.title || "Choose the next move";
   focusNodeWhy.textContent = isComplete
     ? "The visible chain is complete. Add a new branch when the next version of the goal is clear."
@@ -415,6 +762,14 @@ function renderFocusTray() {
   focusNodeAction.textContent = isComplete
     ? "Review the map or add the next achievement."
     : next?.action?.trim() || "Define the smallest visible action.";
+  rewardCopy.textContent = isComplete
+    ? `100% unlocked for ${shorten(top?.title, "the peak", 34)}.`
+    : `${stats.remainingToNext}% until the ${stats.nextMilestone}% reward. Complete one visible move.`;
+  rewardRail.querySelectorAll("[data-milestone]").forEach((item) => {
+    const milestone = Number(item.dataset.milestone);
+    item.classList.toggle("is-earned", stats.progress >= milestone);
+    item.classList.toggle("is-next", !isComplete && stats.nextMilestone === milestone);
+  });
   ritualWish.textContent = shorten(top?.title, "Make the peak real", 48);
   ritualOutcome.textContent = shorten(next?.evidence, "Know what done looks like", 48);
   ritualObstacle.textContent = shorten(next?.blocker, "The likely blocker", 48);
@@ -423,27 +778,43 @@ function renderFocusTray() {
   focusOpenButton.textContent = isComplete ? "Complete" : "Start move";
 }
 
-function showCompletion(node) {
-  const done = nodes.filter((candidate) => candidate.done).length;
-  const progress = Math.round((done / nodes.length) * 100);
+function renderCoach() {
+  const shouldShow = coachOpen && nodes.length > 0 && !setupOpen && !selectedId && !placementMode && !connectFromId;
+  mapCoach.classList.toggle("is-visible", shouldShow);
+}
+
+function showCompletion(node, previousProgress = 0) {
+  const stats = getProgressStats();
   const next = getNextUnclearNode();
+  const top = nodes.find((candidate) => !candidate.parentId) || nodes[0];
+  const finishedBranch = childrenOf(node.id).length > 0 ? "branch" : "move";
+  const milestone = getCrossedMilestone(previousProgress, stats.progress);
 
   clearTimeout(completionTimer);
-  completionTitle.textContent = `${node.title} is done.`;
-  completionCopy.textContent = next
-    ? `${progress}% of the path is complete. Next: ${next.title}.`
-    : "Every visible move is complete. Take a second to notice the promise you kept.";
+  completionTitle.textContent = milestone ? `${milestone}% reward unlocked.` : `${node.title} is done.`;
+  completionCopy.textContent = milestone
+    ? next
+      ? `${node.title} moved ${top.title} forward. Next smallest move: ${next.title}.`
+      : `Every visible ${finishedBranch} is complete. Take a second to notice the promise you kept.`
+    : next
+      ? `${stats.progress}% toward ${top.title}. Next smallest move: ${next.title}.`
+      : `Every visible ${finishedBranch} is complete. Take a second to notice the promise you kept.`;
   completionNextButton.hidden = !next || next.id === node.id;
   completionToast.classList.add("is-visible");
   graphShell.classList.add("is-celebrating");
+  graphShell.classList.add("is-path-unlocked");
+  graphShell.classList.toggle("is-milestone", Boolean(milestone));
 
   completionTimer = setTimeout(() => {
     completionToast.classList.remove("is-visible");
     graphShell.classList.remove("is-celebrating");
+    graphShell.classList.remove("is-path-unlocked");
+    graphShell.classList.remove("is-milestone");
   }, 4200);
 }
 
 function renderSetup() {
+  renderMapLibrary();
   setupPanel.classList.toggle("is-hidden", !setupOpen);
   setupPanel.classList.toggle("can-close", nodes.length > 0);
 }
@@ -486,11 +857,13 @@ function renderPreview(node) {
   inspector.classList.toggle("is-node-done", Boolean(node.done));
   inspector.classList.toggle("is-node-low-confidence", Number(node.confidence) < 65);
   previewTitle.textContent = node.title || "Untitled achievement";
-  previewMeta.textContent =
-    getDepth(node) === 0 ? `Top achievement - ${contextCount}` : `Supporting achievement - ${contextCount}`;
+  previewMeta.textContent = getDepth(node) === 0 ? `Peak - ${contextCount}` : `Support - ${contextCount}`;
   previewStatusPill.textContent = node.done ? "Done" : "Open";
   previewStatusPill.classList.toggle("is-done", Boolean(node.done));
-  previewClearPill.textContent = `${met} of ${checks.length} clear`;
+  previewClearPill.textContent = `${met}/${checks.length} clear`;
+  const guidance = getGuidance(node);
+  previewGuidance.dataset.tone = guidance.tone;
+  previewGuidanceText.textContent = guidance.text;
   confidenceRing.style.setProperty("--confidence", `${Number(node.confidence || 0)}%`);
   confidenceRingValue.textContent = String(node.confidence);
   previewReadinessBar.style.width = `${Math.round((met / checks.length) * 100)}%`;
@@ -503,7 +876,7 @@ function renderPreview(node) {
   } else {
     const chip = document.createElement("span");
     chip.className = "relation-chip is-static";
-    chip.textContent = "Top achievement";
+    chip.textContent = "Peak";
     relationChips.append(chip);
   }
 
@@ -514,14 +887,14 @@ function renderPreview(node) {
   if (!children.length) {
     const chip = document.createElement("span");
     chip.className = "relation-chip is-static";
-    chip.textContent = "No supporting nodes yet";
+    chip.textContent = "No support nodes yet";
     relationChips.append(chip);
   }
 
   localDepthInput.value = String(view.localDepth);
   localDepthLabel.textContent = `${view.localDepth} ${view.localDepth === 1 ? "step" : "steps"}`;
   document.querySelector("#previewDoneButton").textContent = node.done ? "Reopen" : "Done";
-  document.querySelector("#linkNodeButton").textContent = connectFromId === node.id ? "Pick..." : "Link";
+  document.querySelector("#linkNodeButton").textContent = connectFromId === node.id ? "Pick parent..." : "Connect";
   document.querySelector("#globalViewButton").textContent = view.focusMode ? "All" : "Local";
   inspectorPath.textContent =
     getDepth(node) === 0
@@ -600,6 +973,7 @@ function selectNode(id, options = {}) {
   placementMode = false;
   connectFromId = null;
   if (options.focus) view.focusMode = true;
+  if (options.center !== false) centerNodeForSelection(id);
   inspector.classList.add("is-open");
   inspector.classList.toggle("is-editing", Boolean(options.editing));
   if (!options.silent) buzz("select", options.event);
@@ -608,6 +982,12 @@ function selectNode(id, options = {}) {
 
 function handleNodeClick(id, event) {
   event.stopPropagation();
+
+  if (suppressedNodeClickId === id) {
+    suppressedNodeClickId = null;
+    event.preventDefault();
+    return;
+  }
 
   if (connectFromId) {
     connectSelectedTo(id);
@@ -622,7 +1002,6 @@ function selectNodeFromSearch(id) {
   nodeSearch.classList.remove("is-open");
   searchResults.innerHTML = "";
   selectNode(id);
-  centerNode(id);
 }
 
 function clampScale(scale) {
@@ -640,6 +1019,8 @@ function applyViewTransform() {
   graphShell.classList.toggle("has-selection", Boolean(selectedId));
   graphShell.classList.toggle("is-placing", placementMode);
   graphShell.classList.toggle("is-linking", Boolean(connectFromId));
+  graphShell.classList.toggle("is-coaching", coachOpen);
+  renderSelectionHud();
 }
 
 function zoomAt(clientX, clientY, nextScale) {
@@ -689,6 +1070,19 @@ function centerNode(id) {
   applyViewTransform();
 }
 
+function centerNodeForSelection(id) {
+  const position = getGraphLayout().get(id);
+  if (!position) return;
+
+  const rect = graphCanvas.getBoundingClientRect();
+  const isCompact = window.innerWidth <= 760;
+  const targetX = isCompact ? rect.width / 2 : rect.width * 0.66;
+  const targetY = isCompact ? rect.height * 0.3 : rect.height * 0.45;
+
+  view.x = targetX - (position.x / 100) * rect.width * view.scale;
+  view.y = targetY - (position.y / 100) * rect.height * view.scale;
+}
+
 function clearSelection() {
   selectedId = null;
   placementMode = false;
@@ -715,7 +1109,6 @@ function selectNextUnclearNode(event = null) {
   const next = getNextUnclearNode();
   if (!next) return;
   selectNode(next.id, { event });
-  centerNode(next.id);
 }
 
 function renderSearchResults() {
@@ -766,12 +1159,13 @@ function createInitialMap() {
   }
 
   const topId = makeId("top");
+  const mapName = setupMapNameInput.value.trim() || title;
   const prereqs = setupPrereqInput.value
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
 
-  nodes = [
+  const nextNodes = [
     {
       id: topId,
       parentId: null,
@@ -798,16 +1192,22 @@ function createInitialMap() {
     })),
   ];
 
+  const nextMap = createMapRecord({ name: mapName, nodes: nextNodes });
+  maps.push(nextMap);
+  activeMapId = nextMap.id;
+  nodes = nextMap.nodes;
   selectedId = topId;
   setupOpen = false;
   ritualCollapsed = true;
   placementMode = false;
   connectFromId = null;
+  pendingDeleteMapId = null;
   inspector.classList.add("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
-  save();
+  persistMaps();
   buzz("create");
+  showCoach();
   render();
 }
 
@@ -817,13 +1217,16 @@ function openNewMap() {
   selectedId = null;
   placementMode = false;
   connectFromId = null;
+  pendingDeleteMapId = null;
+  coachOpen = false;
   inspector.classList.remove("is-open");
   inspector.classList.remove("is-editing");
   view.focusMode = false;
+  setupMapNameInput.value = "";
   setupGoalInput.value = "";
   setupPrereqInput.value = "";
   render();
-  setupGoalInput.focus();
+  setupMapNameInput.focus();
 }
 
 function closeSetup() {
@@ -832,6 +1235,8 @@ function closeSetup() {
   ritualCollapsed = true;
   placementMode = false;
   connectFromId = null;
+  coachOpen = localStorage.getItem(COACH_STORAGE_KEY) !== "true";
+  setupMapNameInput.value = "";
   setupGoalInput.value = "";
   setupPrereqInput.value = "";
   render();
@@ -860,6 +1265,87 @@ function getGraphPoint(clientX, clientY) {
     x: Math.max(5, Math.min(95, x)),
     y: Math.max(8, Math.min(92, y)),
   };
+}
+
+function beginNodeDrag(id, event) {
+  if (nodeDrag) return;
+  if (connectFromId || placementMode || (event.button ?? 0) !== 0) return;
+
+  const position = getGraphLayout().get(id);
+  if (!position) return;
+  const pointerId = event.pointerId ?? "mouse";
+
+  nodeDrag = {
+    id,
+    pointerId,
+    element: event.currentTarget,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    startX: position.x,
+    startY: position.y,
+    moved: false,
+  };
+
+  if (event.pointerId !== undefined && event.currentTarget.setPointerCapture) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  event.currentTarget.classList.add("is-dragging");
+  graphShell.classList.add("is-dragging-node");
+}
+
+function handleNodeDragMove(event) {
+  const pointerId = event.pointerId ?? "mouse";
+  if (!nodeDrag || nodeDrag.pointerId !== pointerId) return;
+
+  const node = nodes.find((candidate) => candidate.id === nodeDrag.id);
+  if (!node) return;
+
+  const deltaX = event.clientX - nodeDrag.startClientX;
+  const deltaY = event.clientY - nodeDrag.startClientY;
+  if (!nodeDrag.moved && Math.hypot(deltaX, deltaY) < 4) return;
+
+  const rect = graphCanvas.getBoundingClientRect();
+  nodeDrag.moved = true;
+  node.x = Math.max(5, Math.min(95, nodeDrag.startX + (deltaX / view.scale / rect.width) * 100));
+  node.y = Math.max(8, Math.min(92, nodeDrag.startY + (deltaY / view.scale / rect.height) * 100));
+  selectedId = node.id;
+  event.preventDefault();
+  repaintGraphGeometry();
+  applyViewTransform();
+}
+
+function finishNodeDrag(event, wasCancelled = false) {
+  const pointerId = event.pointerId ?? "mouse";
+  if (!nodeDrag || nodeDrag.pointerId !== pointerId) return;
+
+  const draggedId = nodeDrag.id;
+  const moved = nodeDrag.moved;
+  const element = nodeDrag.element;
+  nodeDrag = null;
+
+  element?.classList.remove("is-dragging");
+  graphShell.classList.remove("is-dragging-node");
+  if (event.pointerId !== undefined && element?.hasPointerCapture?.(event.pointerId)) {
+    element.releasePointerCapture(event.pointerId);
+  }
+
+  if (!moved || wasCancelled) return;
+
+  suppressedNodeClickId = draggedId;
+  window.setTimeout(() => {
+    if (suppressedNodeClickId === draggedId) suppressedNodeClickId = null;
+  }, 0);
+  save();
+  buzz("soft", event);
+  render();
+}
+
+function endNodeDrag(event) {
+  finishNodeDrag(event);
+}
+
+function cancelNodeDrag(event) {
+  finishNodeDrag(event, true);
 }
 
 function createPlacedAchievement(clientX, clientY) {
@@ -931,6 +1417,19 @@ function updateParent(parentId) {
   buzz("soft");
   renderGraph();
   renderInspector();
+}
+
+function toggleSelectedDone() {
+  const node = getSelected();
+  if (!node) return;
+
+  const wasDone = node.done;
+  const previousProgress = getProgressStats().progress;
+  node.done = !node.done;
+  save();
+  buzz(node.done ? "complete" : "soft");
+  render();
+  if (!wasDone && node.done) showCompletion(node, previousProgress);
 }
 
 function makeSelectedSmaller() {
@@ -1013,6 +1512,8 @@ Object.entries(inputs).forEach(([key, input]) => {
 });
 
 document.querySelector("#createMapButton").addEventListener("click", createInitialMap);
+mapSelect.addEventListener("change", () => switchMap(mapSelect.value));
+deleteMapButton.addEventListener("click", deleteActiveMap);
 document.querySelector("#newMapButton").addEventListener("click", (event) => {
   buzz("soft", event);
   openNewMap();
@@ -1028,7 +1529,7 @@ document.querySelector("#closeInspectorButton").addEventListener("click", () => 
   buzz("soft");
   clearSelection();
 });
-document.querySelector("#addChildButton").addEventListener("click", addSupportingAchievement);
+addChildButton.addEventListener("click", addSupportingAchievement);
 document.querySelector("#nextNodeButton").addEventListener("click", selectNextUnclearNode);
 focusOpenButton.addEventListener("click", (event) => {
   ritualCollapsed = true;
@@ -1066,24 +1567,34 @@ document.querySelector("#globalViewButton").addEventListener("click", () => {
   render();
 });
 document.querySelector("#previewDoneButton").addEventListener("click", () => {
-  const node = getSelected();
-  if (!node) return;
-  const wasDone = node.done;
-  node.done = !node.done;
-  save();
-  buzz(node.done ? "complete" : "soft");
-  render();
-  if (!wasDone && node.done) showCompletion(node);
+  toggleSelectedDone();
 });
 completionNextButton.addEventListener("click", () => {
   buzz("soft");
   completionToast.classList.remove("is-visible");
   graphShell.classList.remove("is-celebrating");
+  graphShell.classList.remove("is-path-unlocked");
+  graphShell.classList.remove("is-milestone");
   ritualCollapsed = true;
   selectNextUnclearNode();
 });
 document.querySelector("#shrinkButton").addEventListener("click", makeSelectedSmaller);
 document.querySelector("#deleteButton").addEventListener("click", deleteSelected);
+selectionHudDone.addEventListener("click", toggleSelectedDone);
+selectionHudEdit.addEventListener("click", () => {
+  buzz("soft");
+  inspector.classList.add("is-open", "is-editing");
+  inputs.title.focus();
+  renderSelectionHud();
+});
+coachStartButton.addEventListener("click", (event) => {
+  dismissCoach();
+  selectNextUnclearNode(event);
+});
+coachDismissButton.addEventListener("click", () => {
+  buzz("soft");
+  dismissCoach();
+});
 nodeSearchInput.addEventListener("input", renderSearchResults);
 nodeSearchInput.addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
@@ -1149,6 +1660,9 @@ graphCanvas.addEventListener("pointermove", (event) => {
   applyViewTransform();
 });
 
+document.addEventListener("mousemove", handleNodeDragMove);
+document.addEventListener("mouseup", endNodeDrag);
+
 graphCanvas.addEventListener("pointerup", (event) => {
   activePointers.delete(event.pointerId);
   view.isPanning = false;
@@ -1195,6 +1709,7 @@ function render() {
   renderSetup();
   renderGraph();
   renderInspector();
+  renderCoach();
 }
 
 render();
