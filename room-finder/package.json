@@ -1,0 +1,17 @@
+{
+  "name": "room-finder-de",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Finds rooms/flats in Germany under a price cap (WG-Gesucht, Kleinanzeigen) and notifies you.",
+  "bin": {
+    "room-finder": "src/index.js"
+  },
+  "scripts": {
+    "search": "node src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0"
+  }
+}
